@@ -1,0 +1,7 @@
+{
+  "name": "Gestão 93 - Vendas a Prazo",
+  "description": "Um sistema completo para lojas de roupas gerenciarem vendas a prazo, parcelamentos e abatimentos, com insights inteligentes via Gemini.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

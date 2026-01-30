@@ -21,8 +21,8 @@ export const JAN_2026_SPREADSHEET_DATA = {
     { id: 'a9', sku: '16', name: 'Bracelete S2', category: 'Acessórios (Braceletes)', costPrice: 40.00, price: 84.98, stock: 0, minStock: 1 },
   ] as Product[],
   sales: [
-    { id: 's1', customerId: 'BALCAO', description: 'Venda: Calça Jeans 44', baseAmount: 120, discount: 0, totalAmount: 120, netAmount: 120, totalCost: 60, date: '2026-01-05', status: PaymentStatus.PAID, type: 'cash', productId: 'p5', installments: [] },
-    { id: 's2', customerId: 'BALCAO', description: 'Venda: Calça Jeans 38', baseAmount: 120, discount: 0, totalAmount: 120, netAmount: 120, totalCost: 60, date: '2026-01-08', status: PaymentStatus.PAID, type: 'cash', productId: 'p6', installments: [] },
-    { id: 's3', customerId: 'BALCAO', description: 'Venda: Macacão Tule', baseAmount: 124.90, discount: 0, totalAmount: 124.90, netAmount: 124.90, totalCost: 71.15, date: '2026-01-10', status: PaymentStatus.PAID, type: 'cash', productId: 'p7', installments: [] },
+    { id: 's1', customerId: 'BALCAO', description: 'Venda: Calça Jeans 44', baseAmount: 120, discount: 0, totalAmount: 120, netAmount: 120, totalCost: 60, date: '2026-01-05', status: PaymentStatus.PAID, type: 'cash', productId: 'p5', installments: [], items: [] },
+    { id: 's2', customerId: 'BALCAO', description: 'Venda: Calça Jeans 38', baseAmount: 120, discount: 0, totalAmount: 120, netAmount: 120, totalCost: 60, date: '2026-01-08', status: PaymentStatus.PAID, type: 'cash', productId: 'p6', installments: [], items: [] },
+    { id: 's3', customerId: 'BALCAO', description: 'Venda: Macacão Tule', baseAmount: 124.90, discount: 0, totalAmount: 124.90, netAmount: 124.90, totalCost: 71.15, date: '2026-01-10', status: PaymentStatus.PAID, type: 'cash', productId: 'p7', installments: [], items: [] },
   ] as Sale[]
 };

@@ -22,15 +22,17 @@ export interface Expense {
   id: string;
   description: string;
   amount: number;
+  category?: 'fixed' | 'refund' | 'other';
+  date?: string;
 }
 
 export interface Product {
   id: string;
-  sku: string;        // Código do produto
+  sku: string;
   name: string;
   category: string;
-  costPrice: number;  // Preço de custo
-  price: number;      // Preço de venda
+  costPrice: number;
+  price: number;
   stock: number;
   minStock: number;
 }
@@ -38,7 +40,8 @@ export interface Product {
 export enum PaymentStatus {
   PENDING = 'PENDING',
   PAID = 'PAID',
-  PARTIAL = 'PARTIAL'
+  PARTIAL = 'PARTIAL',
+  CANCELED = 'CANCELED'
 }
 
 export interface Installment {
@@ -47,20 +50,31 @@ export interface Installment {
   amount: number;
   paidAmount: number;
   dueDate: string;
+  paymentDate?: string;
   status: PaymentStatus;
+}
+
+export interface SaleItem {
+  id: string;
+  productId?: string;
+  description: string;
+  price: number;
+  costPrice: number;
+  quantity: number;
 }
 
 export interface Sale {
   id: string;
   customerId: string;
   description: string;
+  items: SaleItem[];
   baseAmount: number;
   discount: number;
   totalAmount: number;
   cardFeeRate?: number;
   cardFeeAmount?: number;
   netAmount: number;
-  totalCost: number;   // Custo total dos produtos nesta venda para cálculo de lucro
+  totalCost: number;
   date: string;
   installments: Installment[];
   status: PaymentStatus;
@@ -68,4 +82,10 @@ export interface Sale {
   productId?: string;
 }
 
-export type View = 'dashboard' | 'customers' | 'sales-cash' | 'sales-credit' | 'agenda' | 'settings' | 'expenses' | 'inventory';
+export interface TrashItem {
+  id: string;
+  sale: Sale;
+  deletedAt: number;
+}
+
+export type View = 'dashboard' | 'customers' | 'sales-cash' | 'sales-credit' | 'agenda' | 'settings' | 'expenses' | 'inventory' | 'trash' | 'refunds';

@@ -19,7 +19,7 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
   
   // Carrinho de Itens
   const [cart, setCart] = useState<SaleItem[]>([]);
-  const [selectedProductId, setSelectedProductId] = useState('');
+  const [productSearch, setProductSearch] = useState('');
   const [manualDescription, setManualDescription] = useState('');
   const [manualPrice, setManualPrice] = useState<number>(0);
 
@@ -32,7 +32,26 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
 
   // Estados para adicionar item a venda existente
-  const [editingSaleAddProduct, setEditingSaleAddProduct] = useState('');
+  const [existingSaleSearch, setExistingSaleSearch] = useState('');
+
+  // Filtro de produtos por SKU ou Nome
+  const filteredProducts = useMemo(() => {
+    if (!productSearch.trim()) return [];
+    const term = productSearch.toLowerCase();
+    return products.filter(p => 
+      p.sku.toLowerCase().includes(term) || 
+      p.name.toLowerCase().includes(term)
+    ).slice(0, 5); 
+  }, [productSearch, products]);
+
+  const filteredExistingSaleProducts = useMemo(() => {
+    if (!existingSaleSearch.trim()) return [];
+    const term = existingSaleSearch.toLowerCase();
+    return products.filter(p => 
+      p.sku.toLowerCase().includes(term) || 
+      p.name.toLowerCase().includes(term)
+    ).slice(0, 5);
+  }, [existingSaleSearch, products]);
 
   // Cálculos Automáticos do Formulário
   const baseAmount = useMemo(() => cart.reduce((acc, item) => acc + (item.price * item.quantity), 0), [cart]);
@@ -41,28 +60,26 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
   const cardFeeAmount = (totalAmount * cardFeeRate) / 100;
   const netAmount = totalAmount - cardFeeAmount;
 
-  // Preview de Parcelas
   const installmentPreview = useMemo(() => {
     if (numInstallments <= 0) return 0;
     return totalAmount / numInstallments;
   }, [totalAmount, numInstallments]);
 
-  const addToCart = () => {
-    if (selectedProductId) {
-      const p = products.find(prod => prod.id === selectedProductId);
-      if (p) {
-        const newItem: SaleItem = {
-          id: Math.random().toString(36).substr(2, 5),
-          productId: p.id,
-          description: `${p.sku} - ${p.name}`,
-          price: p.price,
-          costPrice: p.costPrice,
-          quantity: 1
-        };
-        setCart([...cart, newItem]);
-        setSelectedProductId('');
-      }
-    } else if (manualDescription) {
+  const addToCartFromProduct = (p: Product) => {
+    const newItem: SaleItem = {
+      id: Math.random().toString(36).substr(2, 5),
+      productId: p.id,
+      description: `${p.sku} - ${p.name}`,
+      price: p.price,
+      costPrice: p.costPrice,
+      quantity: 1
+    };
+    setCart([...cart, newItem]);
+    setProductSearch('');
+  };
+
+  const addManualToCart = () => {
+    if (manualDescription) {
       const newItem: SaleItem = {
         id: Math.random().toString(36).substr(2, 5),
         description: manualDescription,
@@ -154,6 +171,7 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
     setCustomerId(''); setIsBalcao(false); setCart([]);
     setDiscount(0); setCardFeeRate(0); setNumInstallments(1);
     setDueDay(new Date().getDate());
+    setProductSearch('');
   };
 
   const calculateDueDateFromComponents = (year: number, month: number, targetDay: number, monthsToAdd: number) => {
@@ -165,10 +183,7 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
     return new Date(targetYear, targetMonth, actualDay);
   };
 
-  const handleAddItemToExistingSale = (sale: Sale, prodId: string) => {
-    const p = products.find(prod => prod.id === prodId);
-    if (!p) return;
-
+  const handleAddItemToExistingSale = (sale: Sale, p: Product) => {
     const newItem: SaleItem = {
       id: Math.random().toString(36).substr(2, 5),
       productId: p.id,
@@ -197,8 +212,8 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
       status: PaymentStatus.PARTIAL
     });
 
-    setEditingSaleAddProduct('');
-    alert('Item adicionado à venda. Não esqueça de ajustar as parcelas se necessário.');
+    setExistingSaleSearch('');
+    alert('Item adicionado à venda.');
   };
 
   const handleUpdateInstallment = (sale: Sale, installmentId: string, updates: Partial<Installment>) => {
@@ -221,7 +236,7 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
             {mode === 'cash' ? 'Vendas À Vista' : 'Vendas A Prazo'}
           </h2>
           <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black">
-            {mode === 'cash' ? 'Venda rápida e avulsa' : 'Gestão de fluxo de parcelamento'}
+            {mode === 'cash' ? 'Venda rápida e busca por código' : 'Gestão de fluxo e alteração de datas'}
           </p>
         </div>
         <button 
@@ -253,38 +268,66 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
               </div>
 
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                <label className="block text-[10px] font-black text-slate-400 uppercase mb-3">Carrinho / Itens Avulsos</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-3">Carrinho / Busca por Código</label>
                 
-                {/* Lançamento Avulso (O pedido do usuário) */}
-                <div className="flex gap-2 mb-4 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                  <input 
-                    type="text" 
-                    placeholder="Item Avulso (ex: Cinto)" 
-                    value={manualDescription} 
-                    onChange={e => setManualDescription(e.target.value)} 
-                    className="flex-1 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-[10px] font-bold focus:ring-2 focus:ring-indigo-500 outline-none" 
-                  />
-                  <input 
-                    type="number" 
-                    placeholder="Preço R$" 
-                    value={manualPrice || ''} 
-                    onChange={e => setManualPrice(Number(e.target.value))} 
-                    className="w-20 bg-slate-50 border border-slate-100 rounded-lg px-2 py-2 text-[10px] font-black focus:ring-2 focus:ring-indigo-500 outline-none" 
-                  />
-                  <button type="button" onClick={addToCart} className="bg-slate-900 text-white px-3 py-2 rounded-lg text-[10px] font-black uppercase hover:bg-black transition">+</button>
+                {/* Busca dinâmica por SKU ou Nome */}
+                <div className="relative mb-4">
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      placeholder="Pesquisar por Código (SKU) ou Nome..." 
+                      value={productSearch}
+                      onChange={e => setProductSearch(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
+                    />
+                    <svg className="w-4 h-4 absolute right-4 top-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  </div>
+                  
+                  {filteredProducts.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden divide-y divide-slate-50">
+                      {filteredProducts.map(p => (
+                        <button 
+                          key={p.id} 
+                          type="button"
+                          onClick={() => addToCartFromProduct(p)}
+                          className="w-full p-3 text-left hover:bg-indigo-50 transition flex justify-between items-center group"
+                        >
+                          <div className="min-w-0">
+                            <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded mr-2 uppercase">{p.sku}</span>
+                            <span className="text-[10px] font-bold text-slate-800 uppercase">{p.name}</span>
+                          </div>
+                          <span className="text-[10px] font-black text-indigo-600 group-hover:translate-x-1 transition-transform">R$ {p.price.toFixed(2)} +</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="relative mb-4">
                   <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200"></div></div>
-                  <div className="relative flex justify-center text-[8px] uppercase"><span className="bg-slate-50 px-2 text-slate-400 font-black">Ou Estoque</span></div>
+                  <div className="relative flex justify-center text-[8px] uppercase"><span className="bg-slate-50 px-2 text-slate-400 font-black">Ou Lançamento Manual Avulso</span></div>
                 </div>
 
-                <select value={selectedProductId} onChange={e => { setSelectedProductId(e.target.value); }} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none mb-4">
-                  <option value="">Buscar no Catálogo...</option>
-                  {products.map(p => <option key={p.id} value={p.id}>{p.sku} - {p.name} (R$ {p.price.toFixed(2)})</option>)}
-                </select>
+                {/* Lançamento Avulso */}
+                <div className="flex gap-2 mb-4">
+                  <input 
+                    type="text" 
+                    placeholder="Descrição Manual (ex: Brinde)" 
+                    value={manualDescription} 
+                    onChange={e => setManualDescription(e.target.value)} 
+                    className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10px] font-bold outline-none" 
+                  />
+                  <input 
+                    type="number" 
+                    placeholder="R$" 
+                    value={manualPrice || ''} 
+                    onChange={e => setManualPrice(Number(e.target.value))} 
+                    className="w-20 bg-white border border-slate-200 rounded-xl px-2 py-2 text-[10px] font-black outline-none" 
+                  />
+                  <button type="button" onClick={addManualToCart} className="bg-slate-900 text-white px-3 py-2 rounded-xl text-[10px] font-black uppercase shadow-sm">+</button>
+                </div>
                 
-                {/* Lista do Carrinho com Edição Direta */}
+                {/* Lista do Carrinho */}
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2 no-scrollbar">
                   {cart.map(item => (
                     <div key={item.id} className="flex flex-col bg-white p-3 rounded-xl border border-slate-200 group shadow-sm">
@@ -296,7 +339,7 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
                       </div>
                       <div className="flex gap-4 items-center">
                         <div className="flex-1">
-                          <label className="text-[8px] font-black text-slate-400 uppercase">Preço Unitário</label>
+                          <label className="text-[8px] font-black text-slate-400 uppercase">Preço Editável</label>
                           <div className="flex items-center gap-1">
                             <span className="text-[9px] font-black text-slate-400">R$</span>
                             <input 
@@ -389,7 +432,7 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
                   </div>
                   <div>
                     <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">{customers.find(c => c.id === sale.customerId)?.name || '🛒 Cliente Balcão'}</h3>
-                    <p className="text-[10px] text-slate-500 font-bold uppercase">{sale.description}</p>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase truncate max-w-xs">{sale.description}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-[9px] font-black text-slate-300 uppercase">{new Date(sale.date).toLocaleDateString('pt-BR')}</span>
                       <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase ${sale.status === PaymentStatus.PAID ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-white'}`}>
@@ -412,20 +455,36 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
 
               {isExpanded && (
                 <div className="px-6 pb-6 pt-2 border-t border-slate-50 animate-in slide-in-from-top-2 duration-300 space-y-6">
-                  {/* Adicionar novos produtos na mesma venda */}
+                  {/* Adicionar novos produtos na mesma venda por código */}
                   <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
-                    <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">Incrementar esta venda</h4>
-                    <div className="flex gap-2">
-                      <select value={editingSaleAddProduct} onChange={e => setEditingSaleAddProduct(e.target.value)} className="flex-1 bg-white border border-indigo-200 rounded-xl px-4 py-2 text-[10px] font-bold outline-none">
-                        <option value="">Produto do Estoque...</option>
-                        {products.filter(p => p.stock > 0).map(p => <option key={p.id} value={p.id}>{p.sku} - {p.name} (R$ {p.price.toFixed(2)})</option>)}
-                      </select>
-                      <button 
-                        onClick={() => handleAddItemToExistingSale(sale, editingSaleAddProduct)}
-                        className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-indigo-200 active:scale-95 transition"
-                      >
-                        Incluir
-                      </button>
+                    <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">Incrementar esta venda por Código</h4>
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        placeholder="Pesquisar Produto (Código ou Nome)..." 
+                        value={existingSaleSearch}
+                        onChange={e => setExistingSaleSearch(e.target.value)}
+                        className="w-full bg-white border border-indigo-200 rounded-xl px-4 py-2 text-[10px] font-bold outline-none shadow-sm"
+                      />
+                      
+                      {filteredExistingSaleProducts.length > 0 && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden divide-y divide-slate-50">
+                          {filteredExistingSaleProducts.map(p => (
+                            <button 
+                              key={p.id} 
+                              type="button"
+                              onClick={() => handleAddItemToExistingSale(sale, p)}
+                              className="w-full p-3 text-left hover:bg-indigo-50 transition flex justify-between items-center group"
+                            >
+                              <div className="min-w-0">
+                                <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded mr-2 uppercase">{p.sku}</span>
+                                <span className="text-[10px] font-bold text-slate-800 uppercase">{p.name}</span>
+                              </div>
+                              <span className="text-[10px] font-black text-indigo-600">Adicionar +</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -440,10 +499,9 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
                         <thead className="bg-slate-50/50 text-slate-400 font-black uppercase">
                           <tr>
                             <th className="px-4 py-3">Parc.</th>
-                            <th className="px-4 py-3">Vencimento</th>
+                            <th className="px-4 py-3">Vencimento (Editável)</th>
                             <th className="px-4 py-3">Valor</th>
                             <th className="px-4 py-3">Valor Pago</th>
-                            <th className="px-4 py-3">Data Pgto</th>
                             <th className="px-4 py-3 text-center">Ação</th>
                           </tr>
                         </thead>
@@ -451,7 +509,14 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
                           {sale.installments.map((inst, idx) => (
                             <tr key={inst.id} className="hover:bg-slate-50/80 transition">
                               <td className="px-4 py-3 font-black text-slate-400">{idx + 1}ª</td>
-                              <td className="px-4 py-3 font-bold text-slate-700">{new Date(inst.dueDate).toLocaleDateString('pt-BR')}</td>
+                              <td className="px-4 py-3">
+                                <input 
+                                  type="date" 
+                                  value={inst.dueDate} 
+                                  onChange={e => handleUpdateInstallment(sale, inst.id, { dueDate: e.target.value })}
+                                  className="bg-transparent border border-slate-100 rounded px-1 py-0.5 font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 outline-none"
+                                />
+                              </td>
                               <td className="px-4 py-3">
                                 <input 
                                   type="number" 
@@ -470,19 +535,11 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
                                   className={`w-16 bg-transparent border-none p-0 font-black focus:ring-0 ${inst.paidAmount >= inst.amount ? 'text-emerald-600' : 'text-amber-600'}`}
                                 />
                               </td>
-                              <td className="px-4 py-3">
-                                <input 
-                                  type="date" 
-                                  value={inst.paymentDate || ''} 
-                                  onChange={e => handleUpdateInstallment(sale, inst.id, { paymentDate: e.target.value })}
-                                  className="bg-transparent border-none p-0 text-[9px] font-bold text-slate-400 focus:ring-0"
-                                />
-                              </td>
                               <td className="px-4 py-3 text-center">
                                 {inst.paidAmount < inst.amount ? (
                                   <button onClick={() => handleUpdateInstallment(sale, inst.id, { paidAmount: inst.amount, paymentDate: formatLocalDate(new Date()) })} className="bg-emerald-500 text-white px-2 py-1 rounded text-[8px] font-black uppercase shadow-md shadow-emerald-100">Quitar</button>
                                 ) : (
-                                  <span className="text-emerald-500">✓</span>
+                                  <span className="text-emerald-500 font-black">✓</span>
                                 )}
                               </td>
                             </tr>

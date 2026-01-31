@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { TrashItem, Sale, Customer } from '../types';
+import { TrashItem, Sale, Customer } from '../types.ts';
 
 interface TrashManagerProps {
   trashItems: TrashItem[];
@@ -51,7 +51,7 @@ const TrashManager: React.FC<TrashManagerProps> = ({ trashItems, customers, onRe
                   Restaurar
                 </button>
                 <button 
-                  onClick={() => { if(confirm('Apagar permanentemente agora?')) onDeletePermanent(item.id); }}
+                  onClick={() => { if(window.confirm('Apagar permanentemente agora?')) onDeletePermanent(item.id); }}
                   className="p-2 text-slate-300 hover:text-rose-600 transition"
                   title="Excluir Permanentemente"
                 >

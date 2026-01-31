@@ -3,7 +3,7 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Gestão 93 - Controle de Vendas</title>
     
     <!-- PWA Primary Meta Tags -->
@@ -21,27 +21,46 @@
         font-family: 'Inter', sans-serif;
         background-color: #f8fafc;
         -webkit-tap-highlight-color: transparent;
+        overscroll-behavior-y: contain;
       }
-      /* Otimização para scroll mobile */
       .no-scrollbar::-webkit-scrollbar {
         display: none;
       }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "react/": "https://esm.sh/react@^19.2.4/",
-    "react": "https://esm.sh/react@^19.2.4",
-    "recharts": "https://esm.sh/recharts@^3.7.0",
-    "@google/genai": "https://esm.sh/@google/genai@^1.38.0"
-  }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
+    <script type="importmap">
+    {
+      "imports": {
+        "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+        "react/": "https://esm.sh/react@^19.2.4/",
+        "react": "https://esm.sh/react@^19.2.4",
+        "recharts": "https://esm.sh/recharts@^3.7.0",
+        "@google/genai": "https://esm.sh/@google/genai@^1.38.0"
+      }
+    }
+    </script>
+  <link rel="stylesheet" href="/index.css">
 </head>
   <body>
     <div id="root"></div>
+    <script type="module" src="index.tsx"></script>
+    <script>
+      // Registro inteligente do Service Worker
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          // Usando um caminho relativo explícito para evitar problemas de origin em previews
+          const swUrl = './sw.js';
+          navigator.serviceWorker.register(swUrl)
+            .then(reg => {
+              console.log('Gestão 93: Service Worker registrado com sucesso!');
+            })
+            .catch(err => {
+              // Em ambientes de desenvolvimento/preview, o SW pode falhar por segurança de origem.
+              // Isso é normal e não afetará o app quando ele for publicado em um domínio real.
+              console.warn('Gestão 93: PWA desabilitado no preview (ambiente seguro necessário).');
+            });
+        });
+      }
+    </script>
   <script type="module" src="/index.tsx"></script>
 </body>
 </html>

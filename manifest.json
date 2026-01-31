@@ -2,9 +2,10 @@
 {
   "name": "Gestão 93 - Controle de Vendas",
   "short_name": "Gestão 93",
-  "start_url": ".",
+  "start_url": "./",
   "display": "standalone",
-  "background_color": "#f8fafc",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
   "theme_color": "#312e81",
   "description": "Sistema de gerenciamento de vendas a prazo para lojas de roupas.",
   "icons": [
@@ -13,6 +14,11 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3081/3081648.png",
+      "sizes": "192x192",
+      "type": "image/png"
     }
   ]
 }

@@ -44,19 +44,17 @@
     <div id="root"></div>
     <script type="module" src="index.tsx"></script>
     <script>
-      // Registro inteligente do Service Worker
+      // Registro do Service Worker otimizado para produção e preview
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // Usando um caminho relativo explícito para evitar problemas de origin em previews
-          const swUrl = './sw.js';
-          navigator.serviceWorker.register(swUrl)
-            .then(reg => {
-              console.log('Gestão 93: Service Worker registrado com sucesso!');
-            })
+          // Detecta a URL base atual para registrar o SW corretamente
+          const swPath = './sw.js';
+          navigator.serviceWorker.register(swPath, { scope: './' })
+            .then(reg => console.log('Gestão 93: PWA Pronto!'))
             .catch(err => {
-              // Em ambientes de desenvolvimento/preview, o SW pode falhar por segurança de origem.
-              // Isso é normal e não afetará o app quando ele for publicado em um domínio real.
-              console.warn('Gestão 93: PWA desabilitado no preview (ambiente seguro necessário).');
+              // Se falhar no editor (AI Studio), é normal. 
+              // O app funcionará normalmente quando publicado em domínio próprio.
+              console.warn('Gestão 93: Service Worker aguardando domínio final.');
             });
         });
       }

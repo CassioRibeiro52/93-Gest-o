@@ -1,53 +1,47 @@
 
-const CACHE_NAME = 'gestao93-v2';
-const ASSETS = [
-  './',
-  './index.html',
-  './manifest.json'
+const CACHE_NAME = 'gestao93-cache-v3';
+const OFFLINE_URL = 'index.html';
+
+// Arquivos fundamentais
+const ASSETS_TO_CACHE = [
+  'index.html',
+  'manifest.json',
+  'index.tsx'
 ];
 
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS);
+      return cache.addAll(ASSETS_TO_CACHE);
     })
   );
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
+    caches.keys().then((cacheNames) => {
       return Promise.all(
-        keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
+          }
+        })
       );
     })
   );
+  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
-  // Não faz cache de requisições de outros domínios (Google APIs, Tailwind CDN, etc)
-  // Isso evita o erro de "origin mismatch"
-  if (!event.request.url.startsWith(self.location.origin)) {
-    return;
-  }
-
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request).then((fetchRes) => {
-        return caches.open(CACHE_NAME).then((cache) => {
-          // Apenas faz cache de arquivos estáticos locais bem-sucedidos
-          if (event.request.method === 'GET' && fetchRes.status === 200) {
-            cache.put(event.request, fetchRes.clone());
-          }
-          return fetchRes;
+  // Apenas intercepta navegações ou arquivos locais do mesmo domínio
+  if (event.request.mode === 'navigate' || event.request.url.startsWith(self.location.origin)) {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        return caches.match(event.request).then((response) => {
+          return response || caches.match(OFFLINE_URL);
         });
-      });
-    }).catch(() => {
-      // Se estiver offline e for uma navegação, retorna a página inicial
-      if (event.request.mode === 'navigate') {
-        return caches.match('./index.html');
-      }
-    })
-  );
+      })
+    );
+  }
 });

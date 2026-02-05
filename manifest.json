@@ -3,6 +3,7 @@
   "name": "Gestão 93 - Controle de Vendas",
   "short_name": "Gestão 93",
   "start_url": "index.html",
+  "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",

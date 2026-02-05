@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Customer, Sale, User, Expense, Product, TrashItem, PaymentStatus } from './types.ts';
+import { View, Customer, Sale, User, Expense, Product, TrashItem, PaymentStatus, Installment } from './types.ts';
 import Dashboard from './components/Dashboard.tsx';
 import CustomerList from './components/CustomerList.tsx';
 import SalesManager from './components/SalesManager.tsx';
@@ -139,7 +139,7 @@ const App: React.FC = () => {
   };
 
   const handleAddSale = (s: Omit<Sale, 'id'>) => {
-    const isSameMonth = (d1: string, d2: string) => {
+    const isSameMonthYear = (d1: string, d2: string) => {
       const date1 = new Date(d1);
       const date2 = new Date(d2);
       return date1.getMonth() === date2.getMonth() && date1.getFullYear() === date2.getFullYear();
@@ -150,7 +150,7 @@ const App: React.FC = () => {
         prev.customerId === s.customerId && 
         prev.type === 'credit' && 
         prev.status !== PaymentStatus.PAID &&
-        isSameMonth(prev.date, s.date)
+        isSameMonthYear(prev.date, s.date)
       );
 
       if (existingSaleIndex !== -1) {
@@ -161,15 +161,32 @@ const App: React.FC = () => {
         const updatedTotalCost = existingSale.totalCost + s.totalCost;
         const updatedNetAmount = existingSale.netAmount + s.netAmount;
         
-        const updatedInstallments = existingSale.installments.map((inst) => {
-          const additionalAmount = s.totalAmount / existingSale.installments.length;
-          const newAmount = inst.amount + additionalAmount;
-          return {
-            ...inst,
-            amount: newAmount,
-            status: inst.paidAmount >= newAmount ? PaymentStatus.PAID : (inst.paidAmount > 0 ? PaymentStatus.PARTIAL : PaymentStatus.PENDING)
-          };
+        // CONSOLIDAÇÃO DE PARCELAS POR MÊS/ANO:
+        // Se já existe uma parcela no mesmo mês/ano, soma os valores.
+        // Caso contrário (ex: a nova venda é em mais parcelas), adiciona como nova parcela mensal.
+        const mergedInstallments = [...existingSale.installments];
+
+        s.installments.forEach(newInst => {
+          const newMonthYear = newInst.dueDate.substring(0, 7); // "YYYY-MM"
+          const idx = mergedInstallments.findIndex(ei => ei.dueDate.startsWith(newMonthYear));
+          
+          if (idx !== -1) {
+            const target = mergedInstallments[idx];
+            const newAmount = target.amount + newInst.amount;
+            const newPaidAmount = target.paidAmount + newInst.paidAmount;
+            
+            mergedInstallments[idx] = {
+              ...target,
+              amount: newAmount,
+              paidAmount: newPaidAmount,
+              status: newPaidAmount >= newAmount ? PaymentStatus.PAID : (newPaidAmount > 0 ? PaymentStatus.PARTIAL : PaymentStatus.PENDING)
+            };
+          } else {
+            mergedInstallments.push({ ...newInst, saleId: existingSale.id });
+          }
         });
+
+        mergedInstallments.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
         const mergedSale: Sale = {
           ...existingSale,
@@ -178,14 +195,13 @@ const App: React.FC = () => {
           totalAmount: updatedTotalAmount,
           totalCost: updatedTotalCost,
           netAmount: updatedNetAmount,
-          description: `Consolidada: ${updatedItems.map(i => i.description.split('-')[1] || i.description).join(', ').substring(0, 80)}`,
-          installments: updatedInstallments,
+          description: `Consolidada: ${updatedItems.map(i => i.description.split('-')[1] || i.description).join(', ').substring(0, 100)}`,
+          installments: mergedInstallments,
           status: PaymentStatus.PARTIAL
         };
 
-        const newSales = [...sales];
-        newSales[existingSaleIndex] = mergedSale;
-        setSales(newSales);
+        const otherSales = sales.filter((_, idx) => idx !== existingSaleIndex);
+        setSales([mergedSale, ...otherSales]);
         
         if (s.items && s.items.length > 0) {
           s.items.forEach(item => {
@@ -201,7 +217,7 @@ const App: React.FC = () => {
     }
 
     const newId = Math.random().toString(36).substr(2, 9);
-    setSales(prev => [...prev, { ...s, id: newId }]);
+    setSales(prev => [{ ...s, id: newId }, ...prev]);
 
     if (s.items && s.items.length > 0) {
       s.items.forEach(item => {
@@ -219,8 +235,8 @@ const App: React.FC = () => {
     if (!saleToDelete) return;
 
     setTrashSales(prevTrash => [
-      ...prevTrash, 
-      { id: Math.random().toString(36).substr(2, 9), sale: saleToDelete, deletedAt: Date.now() }
+      { id: Math.random().toString(36).substr(2, 9), sale: saleToDelete, deletedAt: Date.now() },
+      ...prevTrash
     ]);
 
     if (saleToDelete.productId || (saleToDelete.items && saleToDelete.items.length > 0)) {
@@ -248,13 +264,13 @@ const App: React.FC = () => {
         const customer = customers.find(c => c.id === saleToDelete.customerId);
         const customerName = customer ? customer.name : (saleToDelete.customerId === 'BALCAO' ? 'Cliente Balcão' : 'Desconhecido');
         
-        setExpenses(prev => [...prev, {
+        setExpenses(prev => [{
           id: Math.random().toString(36).substr(2, 9),
           description: `ESTORNO (DEVOLUÇÃO): ${customerName}`,
           amount: totalAlreadyPaid,
           category: 'refund',
           date: new Date().toISOString().split('T')[0]
-        }]);
+        }, ...prev]);
       }
     }
 
@@ -284,7 +300,7 @@ const App: React.FC = () => {
       });
     }
 
-    setSales(prev => [...prev, item.sale]);
+    setSales(prev => [item.sale, ...prev]);
     setTrashSales(prev => prev.filter(i => i.id !== trashId));
     alert('Venda restaurada com sucesso!');
   }, [trashSales]);
@@ -357,7 +373,7 @@ const App: React.FC = () => {
           <NavItem id="nav-inventory" icon="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" label="Estoque" active={activeView === 'inventory'} onClick={() => setActiveView('inventory')} />
           <NavItem id="nav-customers" icon="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 005.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" label="Clientes" active={activeView === 'customers'} onClick={() => setActiveView('customers')} />
           <NavItem id="nav-sales-cash" icon="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" label="À Vista" active={activeView === 'sales-cash'} onClick={() => setActiveView('sales-cash')} />
-          <NavItem id="nav-sales-credit" icon="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" label="A Prazo" active={activeView === 'sales-credit'} onClick={() => setActiveView('sales-credit')} />
+          <NavItem id="nav-sales-credit" icon="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2V12a2 2 0 002 2z" label="A Prazo" active={activeView === 'sales-credit'} onClick={() => setActiveView('sales-credit')} />
           <NavItem id="nav-refunds" icon="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2z" label="Estornos" active={activeView === 'refunds'} onClick={() => setActiveView('refunds')} />
           <NavItem id="nav-agenda" icon="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" label="Agenda" active={activeView === 'agenda'} onClick={() => setActiveView('agenda')} />
           <NavItem id="nav-expenses" icon="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" label="Despesas" active={activeView === 'expenses'} onClick={() => setActiveView('expenses')} />

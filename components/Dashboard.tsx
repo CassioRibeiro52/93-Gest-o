@@ -14,7 +14,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ sales, customers, expenses, products }) => {
   const [insights, setInsights] = useState<string>('');
   const [isSyncing, setIsSyncing] = useState(false);
-  const [showBreakdown, setShowBreakdown] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(true);
   
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -39,11 +39,10 @@ const Dashboard: React.FC<DashboardProps> = ({ sales, customers, expenses, produ
     return list;
   }, []);
 
-  // Cálculo de Previsão de Recebimentos (Próximos 6 meses corrigido)
   const forecastData = useMemo(() => {
     const data = [];
     const baseDate = new Date();
-    baseDate.setDate(1); // Define dia 1 para evitar pulo de meses curtos (ex: Fev)
+    baseDate.setDate(1);
 
     for (let i = 0; i < 6; i++) {
       const d = new Date(baseDate);
@@ -81,26 +80,28 @@ const Dashboard: React.FC<DashboardProps> = ({ sales, customers, expenses, produ
     }, 0);
   }, [sales]);
 
-  const getFinancialsForMonth = (month: number, year: number) => {
+  const financials = useMemo(() => {
     const monthSales = sales.filter(s => {
       const saleDate = new Date(s.date);
-      return saleDate.getMonth() === month && saleDate.getFullYear() === year;
+      return saleDate.getMonth() === selectedMonth && saleDate.getFullYear() === selectedYear;
     });
 
     const monthExpenses = expenses.filter(e => {
       if (!e.date) return true; 
       const expDate = new Date(e.date);
-      return expDate.getMonth() === month && expDate.getFullYear() === year;
+      return expDate.getMonth() === selectedMonth && expDate.getFullYear() === selectedYear;
     });
 
-    const stats = monthSales.reduce((acc, s) => {
-      acc.grossRevenue += s.baseAmount;
-      acc.discounts += s.discount;
-      acc.cardFees += (s.cardFeeAmount || 0);
-      acc.totalCostOfGoods += s.totalCost;
-      return acc;
-    }, { grossRevenue: 0, discounts: 0, cardFees: 0, totalCostOfGoods: 0 });
+    // 1. FATURAMENTO BRUTO: Tudo que foi vendido no mês
+    const faturamentoBruto = monthSales.reduce((acc, s) => acc + s.totalAmount, 0);
 
+    // 2. CUSTO DAS MERCADORIAS (CMV)
+    const totalCostOfGoods = monthSales.reduce((acc, s) => acc + s.totalCost, 0);
+
+    // 3. LUCRO BRUTO: Diferença entre preço de venda e preço de custo
+    const lucroBruto = faturamentoBruto - totalCostOfGoods;
+
+    // 4. DESPESAS
     const totalRefunds = monthExpenses
       .filter(e => e.category === 'refund')
       .reduce((sum, e) => sum + e.amount, 0);
@@ -109,14 +110,15 @@ const Dashboard: React.FC<DashboardProps> = ({ sales, customers, expenses, produ
       .filter(e => e.category === 'fixed' || !e.category)
       .reduce((sum, e) => sum + e.amount, 0);
 
-    const netRevenueBeforeRefund = monthSales.reduce((sum, s) => sum + s.netAmount, 0);
-    const realRevenue = netRevenueBeforeRefund - totalRefunds;
+    // 5. LUCRO LÍQUIDO: Lucro Bruto - Despesas
+    const lucroLiquido = lucroBruto - totalFixedExpenses - totalRefunds;
 
+    // Métricas de Fluxo de Caixa (O que realmente entrou)
     const realReceived = sales.reduce((total, sale) => {
       return total + sale.installments.reduce((sum, inst) => {
         if (inst.paymentDate) {
           const pDate = new Date(inst.paymentDate);
-          if (pDate.getMonth() === month && pDate.getFullYear() === year) {
+          if (pDate.getMonth() === selectedMonth && pDate.getFullYear() === selectedYear) {
             return sum + inst.paidAmount;
           }
         }
@@ -125,16 +127,16 @@ const Dashboard: React.FC<DashboardProps> = ({ sales, customers, expenses, produ
     }, 0);
 
     return { 
-      ...stats, 
-      realRevenue, 
-      realReceived, 
+      faturamentoBruto, 
+      totalCostOfGoods, 
+      lucroBruto, 
       totalRefunds, 
-      totalFixedExpenses,
-      profit: realRevenue - stats.totalCostOfGoods - totalFixedExpenses
+      totalFixedExpenses, 
+      lucroLiquido,
+      realReceived
     };
-  };
+  }, [sales, expenses, selectedMonth, selectedYear]);
 
-  const cur = getFinancialsForMonth(selectedMonth, selectedYear);
   const totalStockValueAtSalesPrice = products.reduce((acc, p) => acc + (p.price * p.stock), 0);
 
   const fetchInsights = async (force = false) => {
@@ -156,11 +158,10 @@ const Dashboard: React.FC<DashboardProps> = ({ sales, customers, expenses, produ
 
   return (
     <div className="space-y-6 pb-20">
-      {/* Cabeçalho */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="backdrop-blur-sm bg-white/30 p-2 rounded-xl">
           <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase italic">Dashboard Estratégico</h2>
-          <p className="text-sm text-slate-700 font-bold uppercase tracking-wider">Gestão de Vendas & Previsões</p>
+          <p className="text-sm text-slate-700 font-bold uppercase tracking-wider">Gestão Financeira Profissional</p>
         </div>
         
         <div className="flex items-center gap-2 bg-white/80 p-1.5 rounded-2xl shadow-sm border border-slate-200">
@@ -181,62 +182,61 @@ const Dashboard: React.FC<DashboardProps> = ({ sales, customers, expenses, produ
         </div>
       </div>
 
-      {/* KPI Principal */}
       <div className="bg-indigo-950 p-8 rounded-[3rem] shadow-2xl border border-indigo-400/20 text-white relative overflow-hidden">
           <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div>
-               <p className="text-indigo-300 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Faturamento Bruto ({months[selectedMonth]})</p>
-               <h3 className="text-5xl font-black tracking-tighter">{formatCurrency(cur.grossRevenue)}</h3>
+               <p className="text-indigo-300 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Lucro Líquido ({months[selectedMonth]})</p>
+               <h3 className={`text-5xl font-black tracking-tighter ${financials.lucroLiquido >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                 {formatCurrency(financials.lucroLiquido)}
+               </h3>
+               <p className="text-indigo-400 text-[9px] font-bold uppercase mt-2">Saldo Real após descontar custos e despesas</p>
             </div>
             <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
                 <div className="bg-white/5 p-5 rounded-3xl backdrop-blur-lg border border-white/10 shadow-inner flex-1 md:flex-none">
-                   <p className="text-indigo-200 text-[9px] font-black uppercase tracking-widest mb-1">Total a Receber (Geral)</p>
-                   <p className="text-2xl font-black text-amber-400">{formatCurrency(totalAbertura)}</p>
+                   <p className="text-indigo-200 text-[9px] font-black uppercase tracking-widest mb-1">Faturamento Bruto</p>
+                   <p className="text-2xl font-black text-white">{formatCurrency(financials.faturamentoBruto)}</p>
                 </div>
-                <div className="bg-white/5 p-5 rounded-3xl backdrop-blur-lg border border-white/10 shadow-inner flex-1 md:flex-none">
-                   <p className="text-indigo-200 text-[9px] font-black uppercase tracking-widest mb-1">Líquido Estimado</p>
-                   <p className="text-2xl font-black text-emerald-400">{formatCurrency(cur.realRevenue)}</p>
+                <div className="bg-emerald-500/10 border border-emerald-500/20 p-5 rounded-3xl backdrop-blur-lg shadow-inner flex-1 md:flex-none">
+                   <p className="text-emerald-300 text-[9px] font-black uppercase tracking-widest mb-1">Entrada em Caixa</p>
+                   <p className="text-2xl font-black text-emerald-400">{formatCurrency(financials.realReceived)}</p>
                 </div>
             </div>
           </div>
       </div>
 
-      {/* Cards Rápidos */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-          <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Recebido no Mês</p>
-          <h3 className="text-xl font-black text-emerald-600">{formatCurrency(cur.realReceived)}</h3>
+          <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">A Receber (Geral)</p>
+          <h3 className="text-xl font-black text-amber-500">{formatCurrency(totalAbertura)}</h3>
         </div>
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-          <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Custo Mercadorias</p>
-          <h3 className="text-xl font-black text-slate-800">{formatCurrency(cur.totalCostOfGoods)}</h3>
+          <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Lucro Bruto (Peças)</p>
+          <h3 className="text-xl font-black text-emerald-600">{formatCurrency(financials.lucroBruto)}</h3>
+        </div>
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+          <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Despesas Fixas</p>
+          <h3 className="text-xl font-black text-rose-600">{formatCurrency(financials.totalFixedExpenses)}</h3>
         </div>
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
           <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Capital em Estoque</p>
           <h3 className="text-xl font-black text-indigo-600">{formatCurrency(totalStockValueAtSalesPrice)}</h3>
         </div>
-        <div className={`p-6 rounded-3xl shadow-sm border ${cur.profit >= 0 ? 'bg-indigo-50 border-indigo-100' : 'bg-rose-50 border-rose-100'}`}>
-          <p className="text-slate-600 text-[10px] font-black uppercase tracking-widest mb-1">Lucro Operacional</p>
-          <h3 className={`text-xl font-black ${cur.profit >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>{formatCurrency(cur.profit)}</h3>
-        </div>
       </div>
 
-      {/* SEÇÃO: PREVISÃO DE RECEBIMENTOS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 min-w-0">
           <div className="flex justify-between items-center mb-8">
             <div>
-              <h4 className="font-black text-slate-900 text-[10px] uppercase tracking-[0.3em]">Previsão de Recebimentos (6 Meses)</h4>
-              <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Estimativa de fluxo de caixa futuro</p>
+              <h4 className="font-black text-slate-900 text-[10px] uppercase tracking-[0.3em]">Fluxo de Caixa Futuro (6 Meses)</h4>
             </div>
             <div className="flex gap-4">
               <div className="flex items-center gap-1.5">
                 <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full"></div>
-                <span className="text-[9px] font-black text-slate-400 uppercase">Pendente</span>
+                <span className="text-[9px] font-black text-slate-400 uppercase">A Receber</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full"></div>
-                <span className="text-[9px] font-black text-slate-400 uppercase">Recebido</span>
+                <span className="text-[9px] font-black text-slate-400 uppercase">Já Recebido</span>
               </div>
             </div>
           </div>
@@ -257,29 +257,6 @@ const Dashboard: React.FC<DashboardProps> = ({ sales, customers, expenses, produ
               </BarChart>
             </ResponsiveContainer>
           </div>
-
-          <div className="mt-8 overflow-x-auto">
-            <table className="w-full text-left text-[10px]">
-              <thead className="bg-slate-50 text-slate-400 font-black uppercase">
-                <tr>
-                  <th className="px-4 py-3">Mês / Período</th>
-                  <th className="px-4 py-3 text-right">A Receber</th>
-                  <th className="px-4 py-3 text-right">Já Recebido</th>
-                  <th className="px-4 py-3 text-right">Total Esperado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {forecastData.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition">
-                    <td className="px-4 py-3 font-black text-slate-700 uppercase">{item.monthName} {item.year}</td>
-                    <td className="px-4 py-3 text-right font-black text-indigo-600">{formatCurrency(item.Pendente)}</td>
-                    <td className="px-4 py-3 text-right font-black text-emerald-600">{formatCurrency(item.Recebido)}</td>
-                    <td className="px-4 py-3 text-right font-black text-slate-900">{formatCurrency(item.Pendente + item.Recebido)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         </div>
 
         <div className="space-y-6">
@@ -290,12 +267,12 @@ const Dashboard: React.FC<DashboardProps> = ({ sales, customers, expenses, produ
           </div>
 
           <div className="bg-indigo-50 p-6 rounded-3xl border border-indigo-100">
-            <h4 className="font-black text-indigo-900 text-[10px] uppercase tracking-widest mb-3">DRE Simplificado</h4>
+            <h4 className="font-black text-indigo-900 text-[10px] uppercase tracking-widest mb-3">Demonstrativo de Resultado</h4>
             <button 
               onClick={() => setShowBreakdown(!showBreakdown)}
               className="w-full bg-white text-indigo-600 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest border border-indigo-200 shadow-sm"
             >
-              {showBreakdown ? 'Ocultar Detalhes' : 'Ver DRE Completo'}
+              {showBreakdown ? 'Ocultar DRE' : 'Ver DRE Completo'}
             </button>
           </div>
         </div>
@@ -303,40 +280,49 @@ const Dashboard: React.FC<DashboardProps> = ({ sales, customers, expenses, produ
 
       {showBreakdown && (
         <div className="bg-white p-10 rounded-[3rem] shadow-2xl animate-in fade-in slide-in-from-top-4 duration-500 border border-slate-100">
-           <h4 className="text-xl font-black uppercase italic tracking-widest mb-8 text-slate-900 border-b border-slate-100 pb-4">Demonstrativo Detalhado ({months[selectedMonth]} {selectedYear})</h4>
+           <h4 className="text-xl font-black uppercase italic tracking-widest mb-8 text-slate-900 border-b border-slate-100 pb-4">DRE - Demonstrativo de Resultado</h4>
            <div className="space-y-4 text-sm font-medium">
-              <div className="flex justify-between text-indigo-600 font-black uppercase text-xs">
-                 <span>(+) Faturamento Bruto</span>
-                 <span>{formatCurrency(cur.grossRevenue)}</span>
+              <div className="flex justify-between text-indigo-900 font-black uppercase text-sm p-4 bg-indigo-50 rounded-2xl">
+                 <span>FATURAMENTO BRUTO (Total Vendido)</span>
+                 <span>{formatCurrency(financials.faturamentoBruto)}</span>
               </div>
-              <div className="flex justify-between text-rose-500">
-                 <span>(-) Descontos</span>
-                 <span>{formatCurrency(cur.discounts)}</span>
+              
+              <div className="flex justify-between text-rose-500 px-4 py-2">
+                 <span className="font-bold uppercase text-xs">(-) Custo das Mercadorias (CMV)</span>
+                 <span className="font-black">{formatCurrency(financials.totalCostOfGoods)}</span>
               </div>
-              <div className="flex justify-between text-rose-500">
-                 <span>(-) Taxas de Cartão</span>
-                 <span>{formatCurrency(cur.cardFees)}</span>
+
+              <div className="h-px bg-slate-100 mx-4"></div>
+              
+              <div className="flex justify-between text-emerald-600 font-black uppercase text-sm p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+                 <span>(=) LUCRO BRUTO</span>
+                 <span>{formatCurrency(financials.lucroBruto)}</span>
               </div>
-              <div className="flex justify-between text-rose-600 font-bold border-b border-slate-100 pb-2">
-                 <span>(-) Estornos</span>
-                 <span>{formatCurrency(cur.totalRefunds)}</span>
+              
+              <div className="flex justify-between text-rose-500 px-4 py-2">
+                 <span className="font-bold uppercase text-xs">(-) Despesas Fixas / Operacionais</span>
+                 <span className="font-black">{formatCurrency(financials.totalFixedExpenses)}</span>
               </div>
-              <div className="flex justify-between pt-2 text-slate-900 font-black">
-                 <span>(=) Faturamento Líquido Real</span>
-                 <span>{formatCurrency(cur.realRevenue)}</span>
+
+              <div className="flex justify-between text-rose-500 px-4 py-2">
+                 <span className="font-bold uppercase text-xs">(-) Estornos / Devoluções</span>
+                 <span className="font-black">{formatCurrency(financials.totalRefunds)}</span>
               </div>
-              <div className="flex justify-between text-rose-500 pt-4">
-                 <span>(-) Custo de Mercadorias (CMV)</span>
-                 <span>{formatCurrency(cur.totalCostOfGoods)}</span>
+
+              <div className="flex justify-between pt-6 mt-6 border-t-4 border-indigo-500/10 text-4xl font-black text-indigo-600 p-4">
+                 <div className="flex flex-col">
+                   <span>LUCRO LÍQUIDO</span>
+                   <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-widest">Resultado Final do Mês</span>
+                 </div>
+                 <span className={financials.lucroLiquido >= 0 ? 'text-indigo-600' : 'text-rose-600'}>
+                   {formatCurrency(financials.lucroLiquido)}
+                 </span>
               </div>
-              <div className="flex justify-between text-rose-500">
-                 <span>(-) Despesas Fixas</span>
-                 <span>{formatCurrency(cur.totalFixedExpenses)}</span>
-              </div>
-              <div className="flex justify-between pt-6 mt-6 border-t-2 border-indigo-500/10 text-3xl font-black text-indigo-600">
-                 <span>LUCRO LÍQUIDO</span>
-                 <span>{formatCurrency(cur.profit)}</span>
-              </div>
+              <p className="text-[10px] text-slate-400 text-center font-bold uppercase tracking-widest pt-4 italic">
+                * Faturamento Bruto: Valor total das vendas realizadas no período.
+                <br/>* Lucro Bruto: Ganho direto sobre a venda (Venda - Custo).
+                <br/>* Lucro Líquido: O que sobra após pagar todas as despesas e estornos.
+              </p>
            </div>
         </div>
       )}

@@ -17,24 +17,37 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
   const [customerId, setCustomerId] = useState('');
   const [isBalcao, setIsBalcao] = useState(false);
   
-  // Carrinho de Itens
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [productSearch, setProductSearch] = useState('');
-  const [manualDescription, setManualDescription] = useState('');
+  
+  const [manualDesc, setManualDesc] = useState('');
   const [manualPrice, setManualPrice] = useState<number>(0);
-
+  const [manualCost, setManualCost] = useState<number>(0);
+  const [manualQty, setManualQty] = useState<number>(1);
+  const [showManualFields, setShowManualFields] = useState(false);
+  
   const [discount, setDiscount] = useState<number>(0);
   const [cardFeeRate, setCardFeeRate] = useState<number>(0);
   
   const [numInstallments, setNumInstallments] = useState<number>(1);
-  const [dueDay, setDueDay] = useState<number>(new Date().getDate());
+  
+  const getNextMonthDate = () => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 1);
+    return d.toISOString().split('T')[0];
+  };
+  const [firstDueDate, setFirstDueDate] = useState<string>(getNextMonthDate());
   
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
-
-  // Estados para adicionar item a venda existente
   const [existingSaleSearch, setExistingSaleSearch] = useState('');
 
-  // Filtro de produtos por SKU ou Nome
+  const [editingInstId, setEditingInstId] = useState<string | null>(null);
+  const [editInstValues, setEditInstValues] = useState<{dueDate: string, amount: number, paidAmount: number}>({
+    dueDate: '',
+    amount: 0,
+    paidAmount: 0
+  });
+
   const filteredProducts = useMemo(() => {
     if (!productSearch.trim()) return [];
     const term = productSearch.toLowerCase();
@@ -53,7 +66,6 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
     ).slice(0, 5);
   }, [existingSaleSearch, products]);
 
-  // Cálculos Automáticos do Formulário
   const baseAmount = useMemo(() => cart.reduce((acc, item) => acc + (item.price * item.quantity), 0), [cart]);
   const totalCost = useMemo(() => cart.reduce((acc, item) => acc + (item.costPrice * item.quantity), 0), [cart]);
   const totalAmount = Math.max(0, baseAmount - discount);
@@ -78,19 +90,24 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
     setProductSearch('');
   };
 
-  const addManualToCart = () => {
-    if (manualDescription) {
-      const newItem: SaleItem = {
-        id: Math.random().toString(36).substr(2, 5),
-        description: manualDescription,
-        price: manualPrice || 0,
-        costPrice: 0,
-        quantity: 1
-      };
-      setCart([...cart, newItem]);
-      setManualDescription('');
-      setManualPrice(0);
+  const addManualItemToCart = () => {
+    if (!manualDesc || manualPrice <= 0) {
+      alert("Informe a descrição e o preço de venda.");
+      return;
     }
+    const newItem: SaleItem = {
+      id: Math.random().toString(36).substr(2, 5),
+      description: manualDesc.toUpperCase(),
+      price: manualPrice,
+      costPrice: manualCost,
+      quantity: manualQty
+    };
+    setCart([...cart, newItem]);
+    setManualDesc('');
+    setManualPrice(0);
+    setManualCost(0);
+    setManualQty(1);
+    setShowManualFields(false);
   };
 
   const updateCartItem = (id: string, updates: Partial<SaleItem>) => {
@@ -116,8 +133,7 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
     }
 
     const installments: Installment[] = [];
-    const today = new Date();
-    const todayStr = formatLocalDate(today);
+    const todayStr = formatLocalDate(new Date());
 
     if (mode === 'cash') {
       installments.push({
@@ -133,14 +149,27 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
       const baseValue = Math.floor((totalAmount / numInstallments) * 100) / 100;
       const lastValue = Number((totalAmount - (baseValue * (numInstallments - 1))).toFixed(2));
 
-      for (let i = 1; i <= numInstallments; i++) {
-        const dueDate = calculateDueDateFromComponents(today.getFullYear(), today.getMonth(), dueDay, i);
+      const [year, month, day] = firstDueDate.split('-').map(Number);
+      
+      for (let i = 0; i < numInstallments; i++) {
+        let targetMonth = (month - 1) + i;
+        let targetYear = year;
+        
+        while (targetMonth > 11) {
+          targetMonth -= 12;
+          targetYear += 1;
+        }
+
+        const lastDayOfMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+        const actualDay = Math.min(day, lastDayOfMonth);
+        const installmentDate = new Date(targetYear, targetMonth, actualDay);
+
         installments.push({
           id: Math.random().toString(36).substr(2, 9),
           saleId: '', 
-          amount: i === numInstallments ? lastValue : baseValue,
+          amount: i === numInstallments - 1 ? lastValue : baseValue,
           paidAmount: 0,
-          dueDate: formatLocalDate(dueDate),
+          dueDate: formatLocalDate(installmentDate),
           status: PaymentStatus.PENDING
         });
       }
@@ -170,17 +199,45 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
   const resetForm = () => {
     setCustomerId(''); setIsBalcao(false); setCart([]);
     setDiscount(0); setCardFeeRate(0); setNumInstallments(1);
-    setDueDay(new Date().getDate());
+    setFirstDueDate(getNextMonthDate());
     setProductSearch('');
   };
 
-  const calculateDueDateFromComponents = (year: number, month: number, targetDay: number, monthsToAdd: number) => {
-    let targetMonth = month + monthsToAdd;
-    let targetYear = year;
-    while (targetMonth > 11) { targetMonth -= 12; targetYear += 1; }
-    const lastDayOfMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
-    const actualDay = Math.min(targetDay, lastDayOfMonth);
-    return new Date(targetYear, targetMonth, actualDay);
+  const handleUpdateInstallment = (sale: Sale, installmentId: string, updates: Partial<Installment>) => {
+    const updatedInstallments = sale.installments.map(inst => {
+      if (inst.id === installmentId) {
+        const newPaidAmount = updates.paidAmount !== undefined ? updates.paidAmount : inst.paidAmount;
+        const newAmount = updates.amount !== undefined ? updates.amount : inst.amount;
+        
+        let newStatus = PaymentStatus.PENDING;
+        if (newPaidAmount >= newAmount) newStatus = PaymentStatus.PAID;
+        else if (newPaidAmount > 0) newStatus = PaymentStatus.PARTIAL;
+
+        return { ...inst, ...updates, status: newStatus };
+      }
+      return inst;
+    });
+
+    const newTotalAmount = updatedInstallments.reduce((acc, curr) => acc + curr.amount, 0);
+    const allPaid = updatedInstallments.every(i => i.paidAmount >= i.amount);
+    
+    onUpdateSale({
+      ...sale,
+      totalAmount: newTotalAmount,
+      installments: updatedInstallments,
+      status: allPaid ? PaymentStatus.PAID : PaymentStatus.PARTIAL
+    });
+
+    setEditingInstId(null);
+  };
+
+  const startEditingInstallment = (inst: Installment) => {
+    setEditingInstId(inst.id);
+    setEditInstValues({
+      dueDate: inst.dueDate,
+      amount: inst.amount,
+      paidAmount: inst.paidAmount
+    });
   };
 
   const handleAddItemToExistingSale = (sale: Sale, p: Product) => {
@@ -192,13 +249,35 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
       costPrice: p.costPrice,
       quantity: 1
     };
-
+    
     const updatedItems = [...sale.items, newItem];
     const newBaseAmount = updatedItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
     const newTotalCost = updatedItems.reduce((acc, item) => acc + (item.costPrice * item.quantity), 0);
     const newTotalAmount = Math.max(0, newBaseAmount - sale.discount);
-    const newCardFeeAmount = (newTotalAmount * (sale.cardFeeRate || 0)) / 100;
-    const newNetAmount = newTotalAmount - newCardFeeAmount;
+    
+    // ATUALIZAÇÃO DAS PARCELAS: Adiciona o valor do novo item à próxima parcela pendente
+    const updatedInstallments = [...sale.installments];
+    const nextPendingIdx = updatedInstallments.findIndex(inst => inst.status !== PaymentStatus.PAID);
+    
+    if (nextPendingIdx !== -1) {
+      updatedInstallments[nextPendingIdx] = {
+        ...updatedInstallments[nextPendingIdx],
+        amount: updatedInstallments[nextPendingIdx].amount + p.price,
+        status: updatedInstallments[nextPendingIdx].paidAmount >= (updatedInstallments[nextPendingIdx].amount + p.price) 
+          ? PaymentStatus.PAID : PaymentStatus.PARTIAL
+      };
+    } else {
+      // Se todas as parcelas já foram pagas, cria uma nova parcela de cobrança para hoje
+      const todayStr = formatLocalDate(new Date());
+      updatedInstallments.push({
+        id: Math.random().toString(36).substr(2, 9),
+        saleId: sale.id,
+        amount: p.price,
+        paidAmount: 0,
+        dueDate: todayStr,
+        status: PaymentStatus.PENDING
+      });
+    }
 
     onUpdateSale({
       ...sale,
@@ -206,24 +285,11 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
       baseAmount: newBaseAmount,
       totalAmount: newTotalAmount,
       totalCost: newTotalCost,
-      cardFeeAmount: newCardFeeAmount,
-      netAmount: newNetAmount,
       description: updatedItems.map(i => i.description).join(', ').substring(0, 100),
+      installments: updatedInstallments,
       status: PaymentStatus.PARTIAL
     });
-
     setExistingSaleSearch('');
-    alert('Item adicionado à venda.');
-  };
-
-  const handleUpdateInstallment = (sale: Sale, installmentId: string, updates: Partial<Installment>) => {
-    const updatedInstallments = sale.installments.map(inst => inst.id === installmentId ? { ...inst, ...updates } : inst);
-    const allPaid = updatedInstallments.every(i => i.paidAmount >= i.amount);
-    onUpdateSale({
-      ...sale,
-      installments: updatedInstallments,
-      status: allPaid ? PaymentStatus.PAID : PaymentStatus.PARTIAL
-    });
   };
 
   const accentColor = mode === 'cash' ? 'emerald' : 'indigo';
@@ -236,7 +302,7 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
             {mode === 'cash' ? 'Vendas À Vista' : 'Vendas A Prazo'}
           </h2>
           <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black">
-            {mode === 'cash' ? 'Venda rápida e busca por código' : 'Gestão de fluxo e alteração de datas'}
+            {mode === 'cash' ? 'Venda rápida e busca por código' : 'Gestão de fluxo e escolha de vencimentos'}
           </p>
         </div>
         <button 
@@ -250,7 +316,6 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
       {showAdd && (
         <form onSubmit={handleAddSale} className="bg-white p-6 rounded-3xl shadow-2xl border border-slate-100 space-y-6 animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Esquerda: Cliente e Itens */}
             <div className="space-y-4">
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                 <div className="flex justify-between items-center mb-3">
@@ -268,66 +333,62 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
               </div>
 
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                <label className="block text-[10px] font-black text-slate-400 uppercase mb-3">Carrinho / Busca por Código</label>
-                
-                {/* Busca dinâmica por SKU ou Nome */}
-                <div className="relative mb-4">
-                  <div className="relative">
-                    <input 
-                      type="text" 
-                      placeholder="Pesquisar por Código (SKU) ou Nome..." 
-                      value={productSearch}
-                      onChange={e => setProductSearch(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
-                    />
-                    <svg className="w-4 h-4 absolute right-4 top-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                  </div>
-                  
-                  {filteredProducts.length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden divide-y divide-slate-50">
-                      {filteredProducts.map(p => (
-                        <button 
-                          key={p.id} 
-                          type="button"
-                          onClick={() => addToCartFromProduct(p)}
-                          className="w-full p-3 text-left hover:bg-indigo-50 transition flex justify-between items-center group"
-                        >
-                          <div className="min-w-0">
-                            <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded mr-2 uppercase">{p.sku}</span>
-                            <span className="text-[10px] font-bold text-slate-800 uppercase">{p.name}</span>
-                          </div>
-                          <span className="text-[10px] font-black text-indigo-600 group-hover:translate-x-1 transition-transform">R$ {p.price.toFixed(2)} +</span>
-                        </button>
-                      ))}
+                <div className="flex justify-between items-center mb-3">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase">Carrinho / Itens da Venda</label>
+                    <button type="button" onClick={() => setShowManualFields(!showManualFields)} className="text-[9px] font-black text-indigo-600 uppercase underline">
+                        {showManualFields ? 'Cancelar Item Manual' : '+ Adicionar Item Sem Cadastro'}
+                    </button>
+                </div>
+
+                {showManualFields ? (
+                    <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 mb-4 animate-in slide-in-from-top-2 duration-200">
+                        <div className="grid grid-cols-1 gap-3">
+                            <div>
+                                <label className="text-[8px] font-black text-indigo-400 uppercase">Descrição do Produto</label>
+                                <input type="text" value={manualDesc} onChange={e => setManualDesc(e.target.value)} className="w-full bg-white border-none p-2 text-[10px] font-black rounded outline-none" placeholder="Ex: Vestido Festa Avulso" />
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                                <div>
+                                    <label className="text-[8px] font-black text-indigo-400 uppercase">Venda R$</label>
+                                    <input type="number" step="0.01" value={manualPrice || ''} onChange={e => setManualPrice(Number(e.target.value))} className="w-full bg-white border-none p-2 text-[10px] font-black text-emerald-600 rounded outline-none" />
+                                </div>
+                                <div>
+                                    <label className="text-[8px] font-black text-indigo-400 uppercase">Custo R$</label>
+                                    <input type="number" step="0.01" value={manualCost || ''} onChange={e => setManualCost(Number(e.target.value))} className="w-full bg-white border-none p-2 text-[10px] font-black text-rose-500 rounded outline-none" />
+                                </div>
+                                <div>
+                                    <label className="text-[8px] font-black text-indigo-400 uppercase">Qtd</label>
+                                    <input type="number" value={manualQty} onChange={e => setManualQty(Number(e.target.value))} className="w-full bg-white border-none p-2 text-[10px] font-black rounded outline-none" />
+                                </div>
+                            </div>
+                            <button type="button" onClick={addManualItemToCart} className="w-full bg-indigo-600 text-white py-2 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-md">Adicionar à Venda</button>
+                        </div>
                     </div>
-                  )}
-                </div>
+                ) : (
+                    <div className="relative mb-4">
+                      <input 
+                        type="text" 
+                        placeholder="Pesquisar por Código (SKU) ou Nome..." 
+                        value={productSearch}
+                        onChange={e => setProductSearch(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
+                      />
+                      {filteredProducts.length > 0 && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden divide-y divide-slate-50">
+                          {filteredProducts.map(p => (
+                            <button key={p.id} type="button" onClick={() => addToCartFromProduct(p)} className="w-full p-3 text-left hover:bg-indigo-50 transition flex justify-between items-center group">
+                              <div className="min-w-0">
+                                <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded mr-2 uppercase">{p.sku}</span>
+                                <span className="text-[10px] font-bold text-slate-800 uppercase">{p.name}</span>
+                              </div>
+                              <span className="text-[10px] font-black text-indigo-600">R$ {p.price.toFixed(2)} +</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                )}
 
-                <div className="relative mb-4">
-                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200"></div></div>
-                  <div className="relative flex justify-center text-[8px] uppercase"><span className="bg-slate-50 px-2 text-slate-400 font-black">Ou Lançamento Manual Avulso</span></div>
-                </div>
-
-                {/* Lançamento Avulso */}
-                <div className="flex gap-2 mb-4">
-                  <input 
-                    type="text" 
-                    placeholder="Descrição Manual (ex: Brinde)" 
-                    value={manualDescription} 
-                    onChange={e => setManualDescription(e.target.value)} 
-                    className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10px] font-bold outline-none" 
-                  />
-                  <input 
-                    type="number" 
-                    placeholder="R$" 
-                    value={manualPrice || ''} 
-                    onChange={e => setManualPrice(Number(e.target.value))} 
-                    className="w-20 bg-white border border-slate-200 rounded-xl px-2 py-2 text-[10px] font-black outline-none" 
-                  />
-                  <button type="button" onClick={addManualToCart} className="bg-slate-900 text-white px-3 py-2 rounded-xl text-[10px] font-black uppercase shadow-sm">+</button>
-                </div>
-                
-                {/* Lista do Carrinho */}
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2 no-scrollbar">
                   {cart.map(item => (
                     <div key={item.id} className="flex flex-col bg-white p-3 rounded-xl border border-slate-200 group shadow-sm">
@@ -339,44 +400,30 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
                       </div>
                       <div className="flex gap-4 items-center">
                         <div className="flex-1">
-                          <label className="text-[8px] font-black text-slate-400 uppercase">Preço Editável</label>
-                          <div className="flex items-center gap-1">
-                            <span className="text-[9px] font-black text-slate-400">R$</span>
-                            <input 
-                              type="number" 
-                              value={item.price} 
-                              onChange={e => updateCartItem(item.id, { price: Number(e.target.value) })}
-                              className="w-full bg-slate-50 border-none p-1 text-[10px] font-black text-indigo-600 rounded focus:ring-1 focus:ring-indigo-500"
-                            />
-                          </div>
+                          <label className="text-[8px] font-black text-slate-400 uppercase">Preço</label>
+                          <input type="number" value={item.price} onChange={e => updateCartItem(item.id, { price: Number(e.target.value) })} className="w-full bg-slate-50 border-none p-1 text-[10px] font-black text-indigo-600 rounded" />
                         </div>
                         <div className="w-20">
                           <label className="text-[8px] font-black text-slate-400 uppercase">Qtd</label>
-                          <input 
-                            type="number" 
-                            min="1"
-                            value={item.quantity} 
-                            onChange={e => updateCartItem(item.id, { quantity: Number(e.target.value) })}
-                            className="w-full bg-slate-50 border-none p-1 text-[10px] font-black text-slate-900 rounded focus:ring-1 focus:ring-indigo-500"
-                          />
+                          <input type="number" min="1" value={item.quantity} onChange={e => updateCartItem(item.id, { quantity: Number(e.target.value) })} className="w-full bg-slate-50 border-none p-1 text-[10px] font-black text-slate-900 rounded" />
                         </div>
                       </div>
                     </div>
                   ))}
-                  {cart.length === 0 && <p className="text-center py-4 text-[10px] font-bold text-slate-400 uppercase italic">Carrinho Vazio</p>}
+                  {cart.length === 0 && !showManualFields && (
+                      <p className="text-[10px] text-slate-400 text-center py-4 italic">Carrinho vazio. Busque um produto ou use o lançamento manual.</p>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Direita: Pagamento */}
             <div className="space-y-4">
               <div className="bg-indigo-900 text-white p-6 rounded-3xl shadow-xl relative overflow-hidden">
                 <p className="text-indigo-300 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Total da Nota</p>
                 <h3 className="text-4xl font-black tracking-tighter">R$ {totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
-                
                 <div className="grid grid-cols-2 gap-4 mt-6">
                   <div>
-                    <label className="text-[9px] font-black uppercase text-indigo-300">Desconto Geral (R$)</label>
+                    <label className="text-[9px] font-black uppercase text-indigo-300">Desconto (R$)</label>
                     <input type="number" step="0.01" value={discount || ''} onChange={e => setDiscount(Number(e.target.value))} className="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 text-sm font-black text-white focus:bg-white/20 outline-none" />
                   </div>
                   <div>
@@ -388,26 +435,29 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
 
               {mode === 'credit' && (
                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Qtd Parcelas</label>
                       <input type="number" min="1" max="24" value={numInstallments} onChange={e => setNumInstallments(Number(e.target.value))} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-black focus:ring-2 focus:ring-indigo-500 outline-none" />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Dia Vencimento</label>
-                      <input type="number" min="1" max="31" value={dueDay} onChange={e => setDueDay(Number(e.target.value))} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-black focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Vencimento da 1ª Parcela</label>
+                      <input 
+                        type="date" 
+                        value={firstDueDate} 
+                        onChange={e => setFirstDueDate(e.target.value)} 
+                        className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-black focus:ring-2 focus:ring-indigo-500 outline-none" 
+                      />
                     </div>
                   </div>
-                  
                   <div className="bg-indigo-100 p-3 rounded-xl border border-indigo-200 text-center">
-                    <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Parcelamento Recalculado</p>
+                    <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Preview de Cobrança</p>
                     <p className="text-lg font-black text-indigo-900">{numInstallments}x de R$ {installmentPreview.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                   </div>
                 </div>
               )}
             </div>
           </div>
-
           <div className="flex justify-end pt-4">
             <button type="submit" className={`w-full md:w-auto px-12 py-4 rounded-2xl bg-${accentColor}-600 text-white text-xs font-black uppercase tracking-widest shadow-xl hover:bg-${accentColor}-700 transition active:scale-95`}>
               Finalizar {mode === 'cash' ? 'Venda À Vista' : 'Venda A Prazo'}
@@ -416,7 +466,6 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
         </form>
       )}
 
-      {/* Lista de Vendas */}
       <div className="space-y-4">
         {sales.filter(s => s.type === mode).map(sale => {
           const isExpanded = selectedSaleId === sale.id;
@@ -441,7 +490,6 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
                     </div>
                   </div>
                 </div>
-                
                 <div className="flex items-center gap-6 ml-auto">
                   <div className="text-right">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total</p>
@@ -455,27 +503,14 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
 
               {isExpanded && (
                 <div className="px-6 pb-6 pt-2 border-t border-slate-50 animate-in slide-in-from-top-2 duration-300 space-y-6">
-                  {/* Adicionar novos produtos na mesma venda por código */}
                   <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
-                    <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">Incrementar esta venda por Código</h4>
+                    <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">Incrementar esta venda</h4>
                     <div className="relative">
-                      <input 
-                        type="text" 
-                        placeholder="Pesquisar Produto (Código ou Nome)..." 
-                        value={existingSaleSearch}
-                        onChange={e => setExistingSaleSearch(e.target.value)}
-                        className="w-full bg-white border border-indigo-200 rounded-xl px-4 py-2 text-[10px] font-bold outline-none shadow-sm"
-                      />
-                      
+                      <input type="text" placeholder="Pesquisar Produto..." value={existingSaleSearch} onChange={e => setExistingSaleSearch(e.target.value)} className="w-full bg-white border border-indigo-200 rounded-xl px-4 py-2 text-[10px] font-bold outline-none shadow-sm" />
                       {filteredExistingSaleProducts.length > 0 && (
                         <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden divide-y divide-slate-50">
                           {filteredExistingSaleProducts.map(p => (
-                            <button 
-                              key={p.id} 
-                              type="button"
-                              onClick={() => handleAddItemToExistingSale(sale, p)}
-                              className="w-full p-3 text-left hover:bg-indigo-50 transition flex justify-between items-center group"
-                            >
+                            <button key={p.id} type="button" onClick={() => handleAddItemToExistingSale(sale, p)} className="w-full p-3 text-left hover:bg-indigo-50 transition flex justify-between items-center group">
                               <div className="min-w-0">
                                 <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded mr-2 uppercase">{p.sku}</span>
                                 <span className="text-[10px] font-bold text-slate-800 uppercase">{p.name}</span>
@@ -488,10 +523,9 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
                     </div>
                   </div>
 
-                  {/* Detalhes do Pagamento / Parcelas */}
                   <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
                     <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
-                       <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic">Detalhamento Financeiro</h4>
+                       <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic">Parcelas</h4>
                        <p className="text-[10px] font-black text-rose-600 uppercase">Aberto: R$ {remaining.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                     </div>
                     <div className="overflow-x-auto">
@@ -499,57 +533,111 @@ const SalesManager: React.FC<SalesManagerProps> = ({ sales, customers, products,
                         <thead className="bg-slate-50/50 text-slate-400 font-black uppercase">
                           <tr>
                             <th className="px-4 py-3">Parc.</th>
-                            <th className="px-4 py-3">Vencimento (Editável)</th>
+                            <th className="px-4 py-3">Vencimento</th>
                             <th className="px-4 py-3">Valor</th>
-                            <th className="px-4 py-3">Valor Pago</th>
-                            <th className="px-4 py-3 text-center">Ação</th>
+                            <th className="px-4 py-3">Pago</th>
+                            <th className="px-4 py-3 text-center">Ações</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {sale.installments.map((inst, idx) => (
-                            <tr key={inst.id} className="hover:bg-slate-50/80 transition">
-                              <td className="px-4 py-3 font-black text-slate-400">{idx + 1}ª</td>
-                              <td className="px-4 py-3">
-                                <input 
-                                  type="date" 
-                                  value={inst.dueDate} 
-                                  onChange={e => handleUpdateInstallment(sale, inst.id, { dueDate: e.target.value })}
-                                  className="bg-transparent border border-slate-100 rounded px-1 py-0.5 font-bold text-slate-700 focus:ring-1 focus:ring-indigo-500 outline-none"
-                                />
-                              </td>
-                              <td className="px-4 py-3">
-                                <input 
-                                  type="number" 
-                                  step="0.01" 
-                                  value={inst.amount} 
-                                  onChange={e => handleUpdateInstallment(sale, inst.id, { amount: Number(e.target.value) })}
-                                  className="w-16 bg-transparent border-none p-0 font-black text-slate-900 focus:ring-0"
-                                />
-                              </td>
-                              <td className="px-4 py-3">
-                                <input 
-                                  type="number" 
-                                  step="0.01" 
-                                  value={inst.paidAmount} 
-                                  onChange={e => handleUpdateInstallment(sale, inst.id, { paidAmount: Number(e.target.value) })}
-                                  className={`w-16 bg-transparent border-none p-0 font-black focus:ring-0 ${inst.paidAmount >= inst.amount ? 'text-emerald-600' : 'text-amber-600'}`}
-                                />
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                {inst.paidAmount < inst.amount ? (
-                                  <button onClick={() => handleUpdateInstallment(sale, inst.id, { paidAmount: inst.amount, paymentDate: formatLocalDate(new Date()) })} className="bg-emerald-500 text-white px-2 py-1 rounded text-[8px] font-black uppercase shadow-md shadow-emerald-100">Quitar</button>
-                                ) : (
-                                  <span className="text-emerald-500 font-black">✓</span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
+                          {sale.installments.map((inst, idx) => {
+                            const isEditing = editingInstId === inst.id;
+                            return (
+                              <tr key={inst.id} className="hover:bg-slate-50/80 transition">
+                                <td className="px-4 py-3 font-black text-slate-400">{idx + 1}ª</td>
+                                <td className="px-4 py-3 font-bold text-slate-700">
+                                  {isEditing ? (
+                                    <input 
+                                      type="date" 
+                                      value={editInstValues.dueDate} 
+                                      onChange={e => setEditInstValues({...editInstValues, dueDate: e.target.value})}
+                                      className="bg-white border border-slate-200 rounded px-2 py-1 outline-none font-bold text-[10px]"
+                                    />
+                                  ) : (
+                                    new Date(inst.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 font-black text-slate-900">
+                                  {isEditing ? (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-slate-400">R$</span>
+                                      <input 
+                                        type="number" 
+                                        step="0.01"
+                                        value={editInstValues.amount} 
+                                        onChange={e => setEditInstValues({...editInstValues, amount: Number(e.target.value)})}
+                                        className="w-16 bg-white border border-slate-200 rounded px-2 py-1 outline-none font-black text-[10px]"
+                                      />
+                                    </div>
+                                  ) : (
+                                    `R$ ${inst.amount.toFixed(2)}`
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 font-black text-emerald-600">
+                                  {isEditing ? (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-slate-400">R$</span>
+                                      <input 
+                                        type="number" 
+                                        step="0.01"
+                                        value={editInstValues.paidAmount} 
+                                        onChange={e => setEditInstValues({...editInstValues, paidAmount: Number(e.target.value)})}
+                                        className="w-16 bg-white border border-slate-200 rounded px-2 py-1 outline-none font-black text-[10px]"
+                                      />
+                                    </div>
+                                  ) : (
+                                    `R$ ${inst.paidAmount.toFixed(2)}`
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <div className="flex items-center justify-center gap-2">
+                                    {isEditing ? (
+                                      <>
+                                        <button 
+                                          onClick={() => handleUpdateInstallment(sale, inst.id, editInstValues)}
+                                          className="bg-emerald-500 text-white p-1 rounded hover:bg-emerald-600 transition"
+                                          title="Salvar"
+                                        >
+                                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
+                                        </button>
+                                        <button 
+                                          onClick={() => setEditingInstId(null)}
+                                          className="bg-slate-400 text-white p-1 rounded hover:bg-slate-500 transition"
+                                          title="Cancelar"
+                                        >
+                                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <button 
+                                          onClick={() => startEditingInstallment(inst)}
+                                          className="p-1 text-slate-400 hover:text-indigo-600 transition"
+                                          title="Editar Parcela"
+                                        >
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                        </button>
+                                        {inst.paidAmount < inst.amount && (
+                                          <button 
+                                            onClick={() => handleUpdateInstallment(sale, inst.id, { paidAmount: inst.amount, paymentDate: formatLocalDate(new Date()) })} 
+                                            className="bg-emerald-500 text-white px-2 py-1 rounded text-[8px] font-black uppercase hover:bg-emerald-600 transition"
+                                          >
+                                            Quitar
+                                          </button>
+                                        )}
+                                        {inst.paidAmount >= inst.amount && <span className="text-emerald-500 font-black">✓</span>}
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
                   </div>
-                  
-                  <button onClick={() => onDeleteSale && onDeleteSale(sale.id, false)} className="w-full py-3 bg-rose-50 text-rose-600 rounded-xl text-[9px] font-black uppercase tracking-widest border border-rose-100 hover:bg-rose-600 hover:text-white transition">Excluir Registro de Venda</button>
+                  <button onClick={() => onDeleteSale && onDeleteSale(sale.id, false)} className="w-full py-3 bg-rose-50 text-rose-600 rounded-xl text-[9px] font-black uppercase tracking-widest border border-rose-100 hover:bg-rose-600 hover:text-white transition">Excluir Venda</button>
                 </div>
               )}
             </div>

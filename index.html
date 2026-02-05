@@ -12,7 +12,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Gestão 93" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3081/3081648.png" />
-    <link rel="manifest" href="manifest.json" />
+    
+    <link rel="manifest" href="manifest.json?v=2" />
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -44,17 +45,20 @@
     <div id="root"></div>
     <script type="module" src="index.tsx"></script>
     <script>
-      // Registro do Service Worker otimizado para produção e preview
+      // Registro de Service Worker com verificação de segurança para ambientes de sandbox
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // Detecta a URL base atual para registrar o SW corretamente
-          const swPath = './sw.js';
-          navigator.serviceWorker.register(swPath, { scope: './' })
-            .then(reg => console.log('Gestão 93: PWA Pronto!'))
+          const swPath = 'sw.js';
+          // Usamos um caminho estritamente relativo para garantir que o navegador 
+          // não tente buscar fora da origem atual do frame
+          navigator.serviceWorker.register(swPath)
+            .then(reg => {
+              console.log('Gestão 93: Service Worker registrado com sucesso.');
+            })
             .catch(err => {
-              // Se falhar no editor (AI Studio), é normal. 
-              // O app funcionará normalmente quando publicado em domínio próprio.
-              console.warn('Gestão 93: Service Worker aguardando domínio final.');
+              // Em ambientes de demonstração ou sandbox, o SW pode falhar por restrições de origem.
+              // Isso não impede o funcionamento do app, apenas desabilita o cache offline.
+              console.warn('Gestão 93: O registro do Service Worker foi bloqueado por restrições do ambiente (CORS/Sandbox). O app funcionará apenas online.');
             });
         });
       }

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Sale, Customer, PaymentStatus, Installment } from '../types.ts';
+import { Sale, Customer, PaymentStatus, Installment, SaleItem } from '../types.ts';
 
 interface AgendaProps {
   sales: Sale[];
@@ -9,6 +9,7 @@ interface AgendaProps {
 }
 
 interface ConsolidatedCard {
+  id: string; // ID único para controle de estado (customerId + dueDate)
   customerId: string;
   customerName: string;
   dueDate: string;
@@ -18,10 +19,12 @@ interface ConsolidatedCard {
   isOverdue: boolean;
   salesIds: string[];
   descriptions: string[];
+  items: SaleItem[]; // Lista consolidada de itens vendidos
 }
 
 const Agenda: React.FC<AgendaProps> = ({ sales, customers, onUpdateSale }) => {
   const [abatimentoValues, setAbatimentoValues] = useState<Record<string, string>>({});
+  const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
 
   const formatCurrency = (val: number) => 
     val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
@@ -40,8 +43,8 @@ const Agenda: React.FC<AgendaProps> = ({ sales, customers, onUpdateSale }) => {
 
         if (!months[monthYear]) months[monthYear] = [];
         
-        // Consolidamos por CLIENTE e DATA DE VENCIMENTO
-        let card = months[monthYear].find(c => c.customerId === customerId && c.dueDate === inst.dueDate);
+        const cardId = `${customerId}-${inst.dueDate}`;
+        let card = months[monthYear].find(c => c.id === cardId);
 
         if (!card) {
           const customer = customerId === 'BALCAO' 
@@ -49,6 +52,7 @@ const Agenda: React.FC<AgendaProps> = ({ sales, customers, onUpdateSale }) => {
             : customers.find(c => c.id === customerId);
 
           card = {
+            id: cardId,
             customerId,
             customerName: (customer?.name || 'Cliente Excluído').toUpperCase(),
             dueDate: inst.dueDate,
@@ -57,7 +61,8 @@ const Agenda: React.FC<AgendaProps> = ({ sales, customers, onUpdateSale }) => {
             remainingAmount: 0,
             isOverdue: false,
             salesIds: [],
-            descriptions: []
+            descriptions: [],
+            items: []
           };
           months[monthYear].push(card);
         }
@@ -72,6 +77,10 @@ const Agenda: React.FC<AgendaProps> = ({ sales, customers, onUpdateSale }) => {
         
         if (!card.salesIds.includes(sale.id)) {
           card.salesIds.push(sale.id);
+          // Adiciona os itens da venda à lista consolidada do card
+          if (sale.items && sale.items.length > 0) {
+            card.items = [...card.items, ...sale.items];
+          }
         }
 
         const shortDesc = sale.description.split(':')[1]?.trim() || sale.description.split(',')[0].substring(0, 15);
@@ -124,18 +133,22 @@ const Agenda: React.FC<AgendaProps> = ({ sales, customers, onUpdateSale }) => {
       });
     });
 
-    setAbatimentoValues(prev => ({ ...prev, [`${card.customerId}-${card.dueDate}`]: '' }));
+    setAbatimentoValues(prev => ({ ...prev, [card.id]: '' }));
   };
 
   const groupedData = getGroupedData();
   const sortedMonthKeys = Object.keys(groupedData).sort((a, b) => {
     const parseMonth = (str: string) => {
       const parts = str.split(' de ');
-      const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-      return new Date(parseInt(parts[1]), months.indexOf(parts[0].toLowerCase())).getTime();
+      const monthsMap = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+      return new Date(parseInt(parts[1]), monthsMap.indexOf(parts[0].toLowerCase())).getTime();
     };
     return parseMonth(a) - parseMonth(b);
   });
+
+  const toggleExpand = (id: string) => {
+    setExpandedCardId(expandedCardId === id ? null : id);
+  };
 
   return (
     <div className="space-y-8 pb-24">
@@ -154,73 +167,117 @@ const Agenda: React.FC<AgendaProps> = ({ sales, customers, onUpdateSale }) => {
               <div className="h-0.5 flex-1 bg-slate-200/50"></div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {cards.map((card) => {
                 const isPaid = card.remainingAmount <= 0;
-                const dueDate = new Date(card.dueDate);
-                const inputKey = `${card.customerId}-${card.dueDate}`;
+                const isExpanded = expandedCardId === card.id;
+                const dueDate = new Date(card.dueDate + 'T12:00:00');
+                const inputKey = card.id;
                 
                 const statusColor = isPaid ? 'emerald' : (card.isOverdue ? 'rose' : 'amber');
                 const statusBg = isPaid ? 'bg-emerald-500' : (card.isOverdue ? 'bg-rose-500' : 'bg-amber-400');
 
                 return (
                   <div 
-                    key={`${card.customerId}-${card.dueDate}`} 
-                    className={`flex flex-col bg-white border-2 rounded-[2rem] p-5 transition-all shadow-sm relative overflow-hidden h-full ${isPaid ? 'opacity-40 border-slate-100' : `border-${statusColor}-100 hover:shadow-xl hover:scale-[1.02]`}`}
+                    key={card.id} 
+                    className={`flex flex-col bg-white border-2 rounded-[2rem] transition-all shadow-sm relative overflow-hidden h-fit ${isPaid ? 'opacity-60 border-slate-100' : `border-${statusColor}-100 hover:shadow-xl ${isExpanded ? 'ring-4 ring-indigo-50' : ''}`} ${isExpanded ? 'col-span-2' : ''}`}
                   >
-                    {/* Badge de Data Redondo (Top-Left) */}
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className={`flex items-center justify-center text-[10px] font-black w-10 h-10 rounded-full text-white shadow-md shrink-0 ${statusBg}`}>
-                        {dueDate.getDate()}/{dueDate.getMonth() + 1}
-                      </div>
-                      <div className="min-w-0">
-                        <h4 className="text-[11px] font-black text-slate-900 truncate tracking-tight leading-tight uppercase">
-                          {card.customerName}
-                        </h4>
-                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Cliente</p>
-                      </div>
-                    </div>
-
-                    {/* Descrição e Valor Centralizados */}
-                    <div className="flex-1 mb-5 space-y-1">
-                      <h5 className="text-[9px] font-black text-slate-400 uppercase leading-none tracking-tight">
-                        {card.descriptions.length > 1 ? 'VÁRIAS COMPRAS' : card.descriptions[0]}
-                      </h5>
-                      <p className={`text-xl font-black tracking-tighter leading-none ${isPaid ? 'text-emerald-600' : 'text-slate-900'}`}>
-                        {formatCurrency(card.remainingAmount)}
-                      </p>
-                    </div>
-
-                    {/* Controles de Pagamento Diretos */}
-                    {!isPaid ? (
-                      <div className="space-y-2 mt-auto">
-                        <div className="flex items-center bg-white border border-slate-200 rounded-xl overflow-hidden h-10 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
-                          <input 
-                            type="text" 
-                            inputMode="decimal"
-                            placeholder="R$"
-                            value={abatimentoValues[inputKey] || ''}
-                            onChange={e => setAbatimentoValues(prev => ({ ...prev, [inputKey]: e.target.value }))}
-                            className="w-full h-full px-3 text-[11px] font-black text-indigo-600 outline-none placeholder:text-slate-300"
-                          />
-                          <button 
-                            onClick={() => handlePaymentAction(card, abatimentoValues[inputKey] || '0')}
-                            className="bg-indigo-600 text-white px-4 h-full hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M12 4v16m8-8H4" /></svg>
-                          </button>
+                    {/* Cabeçalho do Card */}
+                    <div 
+                      onClick={() => toggleExpand(card.id)}
+                      className="p-5 cursor-pointer select-none"
+                    >
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className={`flex items-center justify-center text-[10px] font-black w-10 h-10 rounded-full text-white shadow-md shrink-0 ${statusBg}`}>
+                          {dueDate.getDate()}/{dueDate.getMonth() + 1}
                         </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-[11px] font-black text-slate-900 truncate tracking-tight leading-tight uppercase">
+                            {card.customerName}
+                          </h4>
+                          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Cliente</p>
+                        </div>
+                        <div className="text-slate-300">
+                          <svg className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+                        </div>
+                      </div>
+
+                      <div className="flex-1 mb-2 space-y-1">
+                        <h5 className="text-[9px] font-black text-slate-400 uppercase leading-none tracking-tight">
+                          {card.descriptions.length > 1 ? 'MÚLTIPLOS LANÇAMENTOS' : card.descriptions[0]}
+                        </h5>
+                        <p className={`text-xl font-black tracking-tighter leading-none ${isPaid ? 'text-emerald-600' : 'text-slate-900'}`}>
+                          {formatCurrency(card.remainingAmount)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Conteúdo Expandido: Detalhes dos Produtos */}
+                    {isExpanded && (
+                      <div className="px-5 pb-5 pt-2 border-t border-slate-50 bg-slate-50/30 animate-in slide-in-from-top-2 duration-300">
+                        <h6 className="text-[8px] font-black text-indigo-400 uppercase tracking-widest mb-3 italic">Conteúdo desta Dívida:</h6>
+                        <div className="space-y-2 max-h-40 overflow-y-auto no-scrollbar mb-4">
+                          {card.items.length > 0 ? card.items.map((item, i) => (
+                            <div key={i} className="flex justify-between items-center bg-white p-2 rounded-xl border border-slate-100 shadow-sm">
+                              <div className="min-w-0 flex-1 pr-2">
+                                <p className="text-[9px] font-black text-slate-800 uppercase truncate">{item.description}</p>
+                                <p className="text-[8px] text-slate-400 font-bold uppercase">{item.quantity} UN x {formatCurrency(item.price)}</p>
+                              </div>
+                              <span className="text-[9px] font-black text-indigo-600 shrink-0">{formatCurrency(item.price * item.quantity)}</span>
+                            </div>
+                          )) : (
+                            <p className="text-[9px] text-slate-400 italic">Detalhes não disponíveis para esta venda antiga.</p>
+                          )}
+                        </div>
+
+                        {/* Botões de Ação dentro do Detalhe */}
+                        {!isPaid && (
+                          <div className="space-y-2">
+                            <div className="flex items-center bg-white border border-slate-200 rounded-xl overflow-hidden h-10 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
+                              <input 
+                                type="text" 
+                                inputMode="decimal"
+                                placeholder="Abater R$"
+                                value={abatimentoValues[inputKey] || ''}
+                                onChange={e => setAbatimentoValues(prev => ({ ...prev, [inputKey]: e.target.value }))}
+                                className="w-full h-full px-3 text-[11px] font-black text-indigo-600 outline-none placeholder:text-slate-300"
+                              />
+                              <button 
+                                onClick={() => handlePaymentAction(card, abatimentoValues[inputKey] || '0')}
+                                className="bg-indigo-600 text-white px-4 h-full hover:bg-indigo-700 transition-all flex items-center justify-center"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M12 4v16m8-8H4" /></svg>
+                              </button>
+                            </div>
+                            <button 
+                              onClick={() => handlePaymentAction(card, card.remainingAmount.toString())}
+                              className="w-full bg-emerald-500 text-white h-10 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 transition shadow-lg shadow-emerald-50"
+                            >
+                              Liquidar Parcela
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Footer Visual simples se não estiver pago e não estiver expandido */}
+                    {!isPaid && !isExpanded && (
+                      <div className="px-5 pb-4 mt-auto">
                         <button 
-                          onClick={() => handlePaymentAction(card, card.remainingAmount.toString())}
-                          className="w-full bg-emerald-500 text-white h-10 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 transition active:scale-95 shadow-lg shadow-emerald-50"
+                          onClick={() => toggleExpand(card.id)}
+                          className="w-full py-2 rounded-xl text-[8px] font-black uppercase text-indigo-500 bg-indigo-50 hover:bg-indigo-100 transition"
                         >
-                          Quitar Dia
+                          Ver Detalhes / Abater
                         </button>
                       </div>
-                    ) : (
-                      <div className="flex items-center justify-center py-3 gap-2 text-emerald-500 font-black text-[10px] uppercase bg-emerald-50 rounded-2xl border border-emerald-100">
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-                        <span>Recebido</span>
+                    )}
+
+                    {isPaid && !isExpanded && (
+                      <div className="px-5 pb-4 mt-auto">
+                        <div className="flex items-center justify-center py-2 gap-2 text-emerald-500 font-black text-[8px] uppercase bg-emerald-50 rounded-xl border border-emerald-100">
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+                          <span>Recebido</span>
+                        </div>
                       </div>
                     )}
                   </div>

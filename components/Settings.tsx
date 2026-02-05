@@ -13,7 +13,7 @@ interface SettingsProps {
 }
 
 const Settings: React.FC<SettingsProps> = ({ user, customers, sales, products, onUpdateProfile, onImport, onClear }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'backup' | 'credits' | 'danger'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'backup' | 'deploy' | 'credits' | 'danger'>('profile');
   
   const [shopName, setShopName] = useState(user?.name || '');
   const [shopLogo, setShopLogo] = useState(user?.avatarUrl || '');
@@ -69,10 +69,11 @@ const Settings: React.FC<SettingsProps> = ({ user, customers, sales, products, o
     <div className="space-y-6">
       <div className="flex border-b border-slate-200 overflow-x-auto no-scrollbar">
         {[
-          { id: 'profile', label: 'Perfil da Loja' },
-          { id: 'backup', label: 'Segurança & Backup' },
+          { id: 'profile', label: 'Perfil' },
+          { id: 'backup', label: 'Backup' },
+          { id: 'deploy', label: 'Publicar App 🚀' },
           { id: 'credits', label: 'Créditos' },
-          { id: 'danger', label: 'Zerar Sistema' }
+          { id: 'danger', label: 'Zerar' }
         ].map(tab => (
           <button 
             key={tab.id} 
@@ -84,7 +85,7 @@ const Settings: React.FC<SettingsProps> = ({ user, customers, sales, products, o
         ))}
       </div>
 
-      <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 min-h-[400px]">
+      <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100 min-h-[400px]">
         {activeTab === 'profile' && (
            <form onSubmit={handleUpdateProfile} className="max-w-xl space-y-8 animate-in fade-in duration-300">
               <div className="flex flex-col md:flex-row items-center gap-8">
@@ -107,16 +108,12 @@ const Settings: React.FC<SettingsProps> = ({ user, customers, sales, products, o
                     <label className="text-[11px] font-black text-slate-800 uppercase tracking-wider">Nome da Loja</label>
                     <input type="text" value={shopName} onChange={(e) => setShopName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-black text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Ex: Boutique 93" />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-black text-slate-800 uppercase tracking-wider">URL do Logotipo</label>
-                    <input type="text" value={shopLogo} onChange={(e) => setShopLogo(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-black text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="https://..." />
-                  </div>
                 </div>
               </div>
               
               <div className="pt-4 border-t border-slate-100 flex justify-end">
                 <button type="submit" className="bg-indigo-900 text-white px-10 py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl hover:bg-indigo-950 transition-all active:scale-95">
-                  Salvar Alterações
+                  Salvar Perfil
                 </button>
               </div>
            </form>
@@ -126,22 +123,19 @@ const Settings: React.FC<SettingsProps> = ({ user, customers, sales, products, o
            <div className="space-y-8 animate-in fade-in duration-300">
               <div className="p-5 bg-amber-50 rounded-2xl border border-amber-100 max-w-2xl">
                 <p className="text-xs text-amber-900 font-bold leading-relaxed">
-                  <span className="font-black uppercase block mb-1">Backup de Segurança:</span> 
-                  Mantenha uma cópia de seus dados em local seguro. Recomenda-se exportar após grandes volumes de lançamentos.
+                  Mantenha uma cópia de segurança. Recomendado baixar após grandes lançamentos.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-4">
-                   <h3 className="text-sm font-black text-slate-900 uppercase italic">Exportar Dados</h3>
-                   <p className="text-xs text-slate-500 font-medium">Baixe um arquivo contendo clientes, produtos e vendas.</p>
+                   <h3 className="text-sm font-black text-slate-900 uppercase italic">Exportar</h3>
                    <button onClick={handleExport} className="w-full bg-indigo-900 text-white px-6 py-4 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg hover:bg-indigo-950 transition">
-                     Download Backup .JSON
+                     Backup .JSON
                    </button>
                 </div>
                 <div className="space-y-4">
-                   <h3 className="text-sm font-black text-slate-900 uppercase italic">Importar Dados</h3>
-                   <p className="text-xs text-slate-500 font-medium">Restaurar sistema a partir de um backup anterior.</p>
+                   <h3 className="text-sm font-black text-slate-900 uppercase italic">Importar</h3>
                    <label className="block w-full cursor-pointer bg-slate-100 text-slate-700 px-6 py-4 rounded-xl text-xs font-black uppercase text-center border border-slate-200 hover:bg-slate-200 transition">
                       Selecionar Arquivo
                       <input type="file" className="hidden" accept=".json" onChange={handleImport} />
@@ -151,52 +145,55 @@ const Settings: React.FC<SettingsProps> = ({ user, customers, sales, products, o
            </div>
         )}
 
+        {activeTab === 'deploy' && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-indigo-900 p-8 rounded-[2rem] text-white">
+              <h3 className="text-2xl font-black italic uppercase tracking-tighter mb-4">Como ter seu próprio Site</h3>
+              <p className="text-sm text-indigo-200 font-medium leading-relaxed">
+                Para que o Gestão 93 não dê erro 404 e funcione como um aplicativo real no seu celular, ele precisa estar em um domínio fixo. Siga os passos:
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-6 bg-slate-50 rounded-3xl border border-slate-200">
+                <span className="text-3xl mb-4 block">📦</span>
+                <h4 className="font-black text-[10px] uppercase tracking-widest text-indigo-600 mb-2">Passo 1</h4>
+                <p className="text-xs font-bold text-slate-700 leading-tight">Crie uma conta gratuita no <b>GitHub</b> e crie um repositório chamado "gestao93".</p>
+              </div>
+              <div className="p-6 bg-slate-50 rounded-3xl border border-slate-200">
+                <span className="text-3xl mb-4 block">☁️</span>
+                <h4 className="font-black text-[10px] uppercase tracking-widest text-indigo-600 mb-2">Passo 2</h4>
+                <p className="text-xs font-bold text-slate-700 leading-tight">Vá em <b>vercel.com</b>, conecte seu GitHub e importe o repositório.</p>
+              </div>
+              <div className="p-6 bg-slate-50 rounded-3xl border border-slate-200">
+                <span className="text-3xl mb-4 block">🔑</span>
+                <h4 className="font-black text-[10px] uppercase tracking-widest text-indigo-600 mb-2">Passo 3</h4>
+                <p className="text-xs font-bold text-slate-700 leading-tight">Nas configurações da Vercel, adicione a <b>Environment Variable</b>: <code>API_KEY</code> com sua chave do Gemini.</p>
+              </div>
+            </div>
+
+            <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-200 text-center">
+              <p className="text-emerald-800 text-xs font-black uppercase tracking-widest">
+                Isso garantirá que seu link seja eterno (ex: minha-loja.vercel.app) e o PWA nunca falhe!
+              </p>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'credits' && (
-          <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="text-center space-y-2">
-              <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tighter">Idealização & Tecnologia</h3>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-[0.3em]">Gestão 93 - Vendas a Prazo</p>
+          <div className="space-y-8 animate-in fade-in duration-300">
+            <div className="text-center">
+              <h3 className="text-2xl font-black text-slate-900 uppercase italic">Idealização</h3>
+              <p className="text-xl font-black text-indigo-950 uppercase italic mt-2">Cássio Ribeiro de Freitas</p>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Idealizador */}
-              <div className="bg-indigo-50 p-8 rounded-3xl border border-indigo-100 flex flex-col items-center text-center group hover:shadow-xl transition-all duration-300">
-                <div className="w-20 h-20 bg-indigo-600 rounded-2xl flex items-center justify-center mb-6 shadow-lg rotate-3 group-hover:rotate-0 transition-transform">
-                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                </div>
-                <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Idealista & Visionário</h4>
-                <p className="text-xl font-black text-indigo-950 uppercase italic">Cássio Ribeiro de Freitas</p>
-                <p className="text-xs text-indigo-700 mt-4 font-bold leading-relaxed max-w-[200px]">Responsável pela concepção estratégica e lógica de negócios do Gestão 93.</p>
-              </div>
-
-              {/* Tecnologias */}
-              <div className="bg-slate-50 p-8 rounded-3xl border border-slate-200 flex flex-col items-center text-center group hover:shadow-xl transition-all duration-300">
-                <div className="flex gap-4 mb-6">
-                  <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-md -rotate-3 group-hover:rotate-0 transition-transform p-3">
-                    <img src="https://www.gstatic.com/images/branding/product/2x/google_64dp.png" alt="Google" className="w-full" />
-                  </div>
-                  <div className="w-14 h-14 bg-indigo-900 rounded-2xl flex items-center justify-center shadow-md rotate-3 group-hover:rotate-0 transition-transform p-3">
-                    <svg className="w-full text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71L12 2z"/></svg>
-                  </div>
-                </div>
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tecnologia & IA</h4>
-                <p className="text-xl font-black text-slate-900 uppercase italic">Google & Gemini 3</p>
-                <p className="text-xs text-slate-600 mt-4 font-bold leading-relaxed">Desenvolvido com a potência da Inteligência Artificial do Google para insights financeiros inteligentes.</p>
-              </div>
-            </div>
-
             <div className="pt-8 border-t border-slate-100 text-center">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.5em]">Versão 2.5 - Estável</p>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.5em]">Versão Estável para Produção</p>
             </div>
           </div>
         )}
 
         {activeTab === 'danger' && (
            <div className="max-w-xl space-y-6 animate-in fade-in duration-300">
-              <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl">
-                 <h3 className="text-sm font-black text-rose-900 uppercase mb-2">Zona de Perigo</h3>
-                 <p className="text-xs text-rose-700 leading-relaxed font-bold uppercase tracking-tight">Esta ação apagará todos os dados de Clientes, Produtos e Vendas deste navegador de forma permanente.</p>
-              </div>
               <button 
                 onClick={() => { if (confirm('TEM CERTEZA? Isso não pode ser desfeito.')) onClear(); }} 
                 className="w-full bg-rose-600 text-white px-8 py-4 rounded-xl text-sm font-black uppercase tracking-widest shadow-lg hover:bg-rose-700 transition-all active:scale-95"
